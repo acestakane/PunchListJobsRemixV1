@@ -1,34 +1,88 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #F8FAFC;
+  color: #050A30;
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+body.dark {
+  background-color: #020617;
+  color: #F8FAFC;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
 }
 
-.App-link {
-    color: #61dafb;
+.app-btn-primary {
+  background: #0000FF;
+  color: white;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 12px 24px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  font-family: 'Inter', sans-serif;
+}
+.app-btn-primary:hover { background: #0000CC; }
+.app-btn-primary:active { transform: scale(0.97); }
+
+.app-btn-secondary {
+  background: white;
+  color: #050A30;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 12px 24px;
+  border: 2px solid #050A30;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+.app-btn-secondary:hover { background: #F1F5F9; }
+
+.card {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.dark .card {
+  background: #0F172A;
+  border-color: #1E293B;
 }
+
+/* Leaflet map fixes */
+.leaflet-container { z-index: 1; }
+.leaflet-pane { z-index: 100 !important; }
+.leaflet-control { z-index: 200 !important; }
+.leaflet-popup { z-index: 300 !important; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 255, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 0, 255, 0); }
+}
+
+.fade-in-up { animation: fadeInUp 0.5s ease forwards; }
+.pulse-glow { animation: pulse-glow 2s infinite; }
+
+/* Status badges */
+.badge-open { background: #DCFCE7; color: #166534; }
+.badge-fulfilled { background: #FEF9C3; color: #854D0E; }
+.badge-in_progress { background: #DBEAFE; color: #1E40AF; }
+.badge-completed { background: #F3F4F6; color: #374151; }
+.badge-emergency { background: #FEF2F2; color: #DC2626; }
+
+.dark .badge-open { background: #166534; color: #DCFCE7; }
+.dark .badge-fulfilled { background: #854D0E; color: #FEF9C3; }
+.dark .badge-in_progress { background: #1E40AF; color: #DBEAFE; }
