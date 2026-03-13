@@ -164,10 +164,13 @@ export default function AdminDashboard() {
                 <h3 className="font-bold text-[#050A30] dark:text-white mb-4" style={{ fontFamily: "Manrope, sans-serif" }}>User Distribution</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value"
+                      label={({ name, value }) => value > 0 ? `${name}: ${value}` : ""}
+                      labelLine={false}
+                    >
                       {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip contentStyle={{ background: "#0F172A", border: "1px solid #1E293B", borderRadius: 8, color: "#fff" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

@@ -13,7 +13,7 @@ from database import db
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-app = FastAPI(title="TheDayLaborers API", version="1.0.0")
+app = FastAPI(title="TheDayLaborers API", version="1.0.0", redirect_slashes=False)
 
 api_router = APIRouter(prefix="/api")
 
