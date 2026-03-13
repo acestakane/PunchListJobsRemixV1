@@ -1,0 +1,158 @@
+{
+  "brand_identity": {
+    "name": "TheDayLaborers",
+    "tagline": "A Blue Collar ME Company",
+    "archetype": "THE PERFORMANCE PRO",
+    "emotional_tone": "Industrial, Immediate, Trustworthy, High-Visibility",
+    "description": "A high-performance workforce marketplace connecting contractors with immediate labor. Visuals are tactical, map-centric, and action-oriented."
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Manrope, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight",
+      "h2": "text-3xl md:text-4xl font-bold tracking-tight",
+      "h3": "text-2xl md:text-3xl font-bold tracking-tight",
+      "body_lg": "text-lg md:text-xl leading-relaxed",
+      "body_base": "text-base leading-relaxed",
+      "caption": "text-sm text-muted-foreground uppercase tracking-wider"
+    },
+    "weights": {
+      "regular": "400",
+      "medium": "500",
+      "bold": "700",
+      "black": "800"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#050A30",
+        "foreground": "#FFFFFF",
+        "description": "Deep Navy - Used for headers, primary backgrounds in dark mode, and strong brand presence."
+      },
+      "secondary": {
+        "DEFAULT": "#000C66",
+        "foreground": "#FFFFFF",
+        "description": "Dark Blue - Used for active states, sidebar backgrounds, and secondary hierarchy."
+      },
+      "accent": {
+        "DEFAULT": "#0000FF",
+        "foreground": "#FFFFFF",
+        "description": "Bright Blue - THE ACTION COLOR. Used strictly for CTAs, Buttons, and Links. High contrast is key."
+      },
+      "muted": {
+        "DEFAULT": "#7EC8E3",
+        "foreground": "#050A30",
+        "description": "Sky Blue - Used for background tints, information boxes, and subtle highlights."
+      },
+      "background": {
+        "light": "#F8FAFC",
+        "dark": "#020617"
+      },
+      "surface": {
+        "light": "#FFFFFF",
+        "dark": "#0F172A"
+      },
+      "status": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      }
+    },
+    "gradients": {
+      "hero_overlay": "linear-gradient(180deg, rgba(5, 10, 48, 0.9) 0%, rgba(5, 10, 48, 0.7) 100%)",
+      "action_glow": "0 0 15px rgba(0, 0, 255, 0.5)"
+    }
+  },
+  "layout_strategies": {
+    "marketing": {
+      "grid": "Bento Grid (Mode A - Tetris)",
+      "alignment": "Left-aligned text, asymmetric visuals",
+      "spacing": "Generous (p-8 to p-24)",
+      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+    },
+    "dashboard": {
+      "grid": "High Density (Mode B - Data Correlation)",
+      "structure": "Sidebar (Left) + Main Content (Right) or 3-Panel (Sidebar + Map + Action)",
+      "mobile": "Bottom Navigation Bar + Stacked Cards",
+      "spacing": "Compact (p-4, gap-4)"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#0000FF] hover:bg-blue-700 text-white font-bold rounded-md shadow-lg transition-transform active:scale-95",
+      "secondary": "bg-white border-2 border-[#050A30] text-[#050A30] hover:bg-slate-50 font-bold rounded-md",
+      "ghost": "hover:bg-slate-100 text-[#050A30]"
+    },
+    "cards": {
+      "dashboard": "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm hover:shadow-md transition-shadow",
+      "marketing": "bg-slate-50 dark:bg-slate-900/50 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden"
+    },
+    "inputs": {
+      "default": "h-11 rounded-md border-slate-300 focus:border-[#0000FF] focus:ring-[#0000FF]"
+    },
+    "map_ui": {
+      "container": "h-[600px] w-full rounded-xl overflow-hidden shadow-inner border border-slate-200",
+      "controls": "absolute top-4 right-4 flex flex-col gap-2 z-[1000]",
+      "marker": "Custom SVG markers in brand colors (#0000FF for jobs, #050A30 for workers)"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "soft": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      "hard": "4px 4px 0px 0px #050A30"
+    },
+    "borders": {
+      "default": "1px solid #E2E8F0",
+      "active": "2px solid #0000FF"
+    },
+    "radius": {
+      "default": "rounded-md",
+      "large": "rounded-xl",
+      "pill": "rounded-full"
+    }
+  },
+  "assets": {
+    "image_urls": {
+      "hero_background": "https://images.unsplash.com/photo-1760009436767-d154e930e55c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxjb25zdHJ1Y3Rpb24lMjBzaXRlJTIwdGVhbSUyMHdvcmtpbmd8ZW58MHx8fHwxNzczMzk4OTM5fDA&ixlib=rb-4.1.0&q=85",
+      "workers": [
+        "https://images.unsplash.com/photo-1583182845142-55eb5b8fe184?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHw0fHxjb25zdHJ1Y3Rpb24lMjB3b3JrZXIlMjBwb3J0cmFpdCUyMGhhcHB5fGVufDB8fHx8MTc3MzM5ODkzOHww&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1693478501743-799eefbc0ecd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwxfHxjb25zdHJ1Y3Rpb24lMjBzaXRlJTIwdGVhbSUyMHdvcmtpbmd8ZW58MHx8fHwxNzczMzk4OTM5fDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1672748341520-6a839e6c05bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHxjb25zdHJ1Y3Rpb24lMjB3b3JrZXIlMjBwb3J0cmFpdCUyMGhhcHB5fGVufDB8fHx8MTc3MzM5ODkzOHww&ixlib=rb-4.1.0&q=85"
+      ],
+      "map_placeholder": "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?auto=format&fit=crop&q=80"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "style": "stroke-width: 1.5px"
+    }
+  },
+  "accessibility": {
+    "contrast_check": "Ensure #0000FF text is NOT used on dark backgrounds without checking APCA. Use #7EC8E3 for text on dark backgrounds.",
+    "focus_states": "focus:ring-2 focus:ring-offset-2 focus:ring-[#0000FF]",
+    "reduced_motion": "Respect prefers-reduced-motion for map animations."
+  },
+  "universal_guidelines": [
+    "Use 'Manrope' for all headings and 'Inter' for body text.",
+    "Do not use generic 'slate-500' text. Use 'text-[#050A30]/80' for softer text to maintain brand tint.",
+    "Map containers must always have a z-index strategy to prevent overlay issues.",
+    "Mobile-first: All grids start at grid-cols-1 and expand at md: or lg:.",
+    "Use 'sonner' for all toast notifications.",
+    "Forms: Use shadcn/ui Form, Input, Select components. Do not use native HTML inputs."
+  ],
+  "instructions_to_main_agent": {
+    "steps": [
+      "1. Update tailwind.config.js with the new color palette extension.",
+      "2. Install 'lucide-react', 'recharts', 'react-leaflet', 'leaflet' (if map required).",
+      "3. Create the layout wrapper with the Top Navbar (Contractor) or Bottom Tab Bar (Crew).",
+      "4. Build the Auth pages first (Login/Register) using the split layout (Image Left, Form Right).",
+      "5. Implement the Dashboard Grid system.",
+      "6. Use the provided image URLs for the Landing Page hero and testimonials."
+    ]
+  }
+}
