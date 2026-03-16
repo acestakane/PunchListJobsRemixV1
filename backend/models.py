@@ -44,9 +44,15 @@ class ProfileUpdate(BaseModel):
     trade: Optional[str] = None
     skills: Optional[List[str]] = None
     availability: Optional[bool] = None
+    is_online: Optional[bool] = None
     location: Optional[Dict] = None
+    address: Optional[str] = None
     company_name: Optional[str] = None
     hide_location: Optional[bool] = None
+
+
+class OnlineStatusUpdate(BaseModel):
+    is_online: bool
 
 
 class LocationUpdate(BaseModel):
@@ -90,8 +96,8 @@ class RatingCreate(BaseModel):
 # ─── Payment Models ──────────────────────────────────────────────────────────
 
 class CheckoutRequest(BaseModel):
-    plan: str  # daily, weekly, monthly
-    payment_method: str  # stripe, paypal
+    plan: str  # daily, weekly, monthly, annual
+    payment_method: str  # stripe, paypal, square
     origin_url: str
 
 

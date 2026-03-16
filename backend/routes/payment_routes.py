@@ -21,12 +21,15 @@ PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
 PAYPAL_SECRET = os.environ.get("PAYPAL_SECRET", "")
 PAYPAL_MODE = os.environ.get("PAYPAL_MODE", "sandbox")
 PAYPAL_BASE_URL = "https://api-m.sandbox.paypal.com" if PAYPAL_MODE == "sandbox" else "https://api-m.paypal.com"
+SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN", "")
+SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID", "")
 
 # Subscription plans (prices defined server-side for security)
 PLANS = {
     "daily": {"amount": 4.99, "days": 1, "label": "Daily Pass"},
     "weekly": {"amount": 24.99, "days": 7, "label": "Weekly Pass"},
     "monthly": {"amount": 79.99, "days": 30, "label": "Monthly Pass"},
+    "annual": {"amount": 699.99, "days": 365, "label": "Annual Pass"},
 }
 
 
@@ -285,3 +288,112 @@ async def subscription_status(current_user: dict = Depends(get_current_user)):
         "days_remaining": days_left,
         "subscription_end": sub_end or trial_end
     }
+
+
+# ─── Square / CashApp Pay ─────────────────────────────────────────────────────
+
+def get_square_client():
+    from square import Square
+    from square.environment import SquareEnvironment
+    return Square(token=SQUARE_ACCESS_TOKEN, environment=SquareEnvironment.PRODUCTION)
+
+
+@router.post("/square/create-link")
+async def square_create_link(data: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+    if data.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not SQUARE_ACCESS_TOKEN or not SQUARE_LOCATION_ID:
+        raise HTTPException(status_code=500, detail="Square not configured")
+
+    plan_info = PLANS[data.plan]
+    settings = await db.settings.find_one({}, {"_id": 0})
+    if settings:
+        plan_info = {
+            "daily": {"amount": settings.get("daily_price", 4.99), "days": 1, "label": "Daily Pass"},
+            "weekly": {"amount": settings.get("weekly_price", 24.99), "days": 7, "label": "Weekly Pass"},
+            "monthly": {"amount": settings.get("monthly_price", 79.99), "days": 30, "label": "Monthly Pass"},
+            "annual": {"amount": settings.get("annual_price", 699.99), "days": 365, "label": "Annual Pass"},
+        }.get(data.plan, plan_info)
+
+    amount_cents = int(plan_info["amount"] * 100)
+    origin = data.origin_url.rstrip("/")
+    redirect_url = f"{origin}/subscription?method=square&plan={data.plan}&user_id={current_user['id']}"
+    idempotency_key = str(uuid.uuid4())
+
+    try:
+        client = get_square_client()
+        resp = client.checkout.payment_links.create(
+            idempotency_key=idempotency_key,
+            description=f"TheDayLaborers {plan_info['label']}",
+            quick_pay={
+                "name": f"TheDayLaborers {plan_info['label']}",
+                "price_money": {"amount": amount_cents, "currency": "USD"},
+                "location_id": SQUARE_LOCATION_ID,
+            },
+            checkout_options={
+                "redirect_url": redirect_url,
+                "ask_for_shipping_address": False,
+            },
+        )
+
+        if resp.errors:
+            raise HTTPException(status_code=400, detail=f"Square error: {resp.errors}")
+
+        link = resp.payment_link
+        tx = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "session_id": link.id,
+            "order_id": link.order_id,
+            "amount": float(plan_info["amount"]),
+            "currency": "usd",
+            "plan": data.plan,
+            "payment_method": "square",
+            "payment_status": "pending",
+            "created_at": now_str(),
+        }
+        await db.payment_transactions.insert_one(tx)
+        return {"url": link.url, "link_id": link.id, "order_id": link.order_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Square payment link error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create Square payment link: {str(e)}")
+
+
+@router.get("/square/status/{order_id}")
+async def square_payment_status(order_id: str, plan: str, user_id: str, current_user: dict = Depends(get_current_user)):
+    # Check if already processed
+    tx = await db.payment_transactions.find_one({"order_id": order_id}, {"_id": 0})
+    if tx and tx.get("payment_status") == "paid":
+        return {"status": "COMPLETED", "already_processed": True}
+
+    if not SQUARE_ACCESS_TOKEN:
+        raise HTTPException(status_code=500, detail="Square not configured")
+
+    try:
+        client = get_square_client()
+        resp = client.orders.get(order_id=order_id)
+        if resp.errors:
+            raise HTTPException(status_code=400, detail=str(resp.errors))
+
+        order = resp.order
+        state = order.state if order else "UNKNOWN"
+
+        if state == "COMPLETED" and (not tx or tx.get("payment_status") != "paid"):
+            actual_user_id = user_id or (tx["user_id"] if tx else current_user["id"])
+            if plan in PLANS:
+                plan_info = PLANS[plan]
+                await update_subscription(actual_user_id, plan, plan_info["days"], "square", plan_info["amount"])
+            await db.payment_transactions.update_one(
+                {"order_id": order_id},
+                {"$set": {"payment_status": "paid", "updated_at": now_str()}},
+                upsert=True
+            )
+
+        return {"status": state, "order_id": order_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Square status check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

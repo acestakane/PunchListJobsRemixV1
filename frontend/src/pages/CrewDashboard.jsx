@@ -6,10 +6,12 @@ import JobMap from "../components/JobMap";
 import JobCard from "../components/JobCard";
 import { toast } from "sonner";
 import axios from "axios";
-import { MapPin, List, Filter, Search, Zap, Clock, Star, RefreshCw, AlertCircle, X } from "lucide-react";
+import {
+  MapPin, List, Filter, Zap, Clock, Star, RefreshCw, AlertCircle, X,
+  CheckCircle, Camera, Phone, Navigation, Briefcase, FileText, ToggleLeft, ToggleRight, AlertTriangle
+} from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
 const TRADES = ["All", "Carpentry", "Electrical", "Plumbing", "Painting", "Landscaping", "Masonry", "HVAC", "General Labor"];
 
 export default function CrewDashboard() {
@@ -19,77 +21,68 @@ export default function CrewDashboard() {
   const [jobs, setJobs] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [isOnline, setIsOnline] = useState(user?.is_online ?? user?.availability ?? false);
   const [loading, setLoading] = useState(true);
   const [tradeFilter, setTradeFilter] = useState("All");
   const [radius, setRadius] = useState(25);
   const [smartMatch, setSmartMatch] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [trialInfo, setTrialInfo] = useState(null);
-
-  // Check profile completeness
-  const profileComplete = user?.name && user?.trade && user?.phone && (user?.skills?.length > 0);
+  const [subStatus, setSubStatus] = useState(null);
+  const [profileCompletion, setProfileCompletion] = useState(null);
 
   const fetchJobs = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (tradeFilter !== "All") params.append("trade", tradeFilter.toLowerCase());
-      if (userLocation) {
+      if (userLocation && locationEnabled) {
         params.append("lat", userLocation.lat);
         params.append("lng", userLocation.lng);
         params.append("radius", radius);
       }
       if (smartMatch) params.append("smart_match", "true");
-
       const res = await axios.get(`${API}/jobs/?${params}`);
       setJobs(res.data);
-    } catch (e) {
-      console.error("Failed to fetch jobs", e);
-    }
-  }, [tradeFilter, userLocation, radius, smartMatch]);
+    } catch (e) { console.error("Failed to fetch jobs", e); }
+  }, [tradeFilter, userLocation, radius, smartMatch, locationEnabled]);
 
   const fetchMyJobs = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/jobs/my-jobs`);
       setMyJobs(res.data);
-    } catch (e) { console.error(e); }
+    } catch { }
   }, []);
 
-  const fetchTrialInfo = useCallback(async () => {
+  const fetchSubStatus = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/users/trial-status`);
-      setTrialInfo(res.data);
-    } catch (e) { }
+      const res = await axios.get(`${API}/payments/subscription/status`);
+      setSubStatus(res.data);
+    } catch { }
+  }, []);
+
+  const fetchProfileCompletion = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/users/profile-completion`);
+      setProfileCompletion(res.data);
+    } catch { }
   }, []);
 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchJobs(), fetchMyJobs(), fetchTrialInfo()]);
+      await Promise.all([fetchJobs(), fetchMyJobs(), fetchSubStatus(), fetchProfileCompletion()]);
       setLoading(false);
     };
     init();
-  }, [fetchJobs, fetchMyJobs, fetchTrialInfo]);
+  }, [fetchJobs, fetchMyJobs, fetchSubStatus, fetchProfileCompletion]);
 
-  // Get user location
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setUserLocation(loc);
-          sendLocation(loc.lat, loc.lng);
-        },
-        () => { /* Location denied */ }
-      );
-    }
-  }, [sendLocation]);
-
-  // WebSocket listener for new jobs
+  // WebSocket: new job notifications
   useEffect(() => {
     const remove = addListener((msg) => {
       if (msg.type === "new_job") {
         setJobs(prev => [msg.job, ...prev.filter(j => j.id !== msg.job.id)]);
-        toast.info(`New job: ${msg.job.title} - $${msg.job.pay_rate}/hr`, {
+        const prefix = msg.job.is_emergency ? "EMERGENCY: " : "New job: ";
+        toast.info(`${prefix}${msg.job.title} - $${msg.job.pay_rate}/hr`, {
           action: { label: "View", onClick: () => setSelectedJob(msg.job) }
         });
       }
@@ -97,14 +90,57 @@ export default function CrewDashboard() {
     return remove;
   }, [addListener]);
 
+  // Location toggle handler
+  const toggleLocation = () => {
+    if (!locationEnabled) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setUserLocation(loc);
+            sendLocation(loc.lat, loc.lng);
+            axios.post(`${API}/users/location`, { lat: loc.lat, lng: loc.lng }).catch(() => {});
+            setLocationEnabled(true);
+            toast.success("Location enabled. Showing nearby jobs.");
+          },
+          () => { toast.error("Location access denied. Please allow in browser settings."); }
+        );
+      }
+    } else {
+      setLocationEnabled(false);
+      setUserLocation(null);
+      toast.info("Location disabled.");
+    }
+  };
+
+  // Online/Offline toggle
+  const toggleOnlineStatus = async () => {
+    const newStatus = !isOnline;
+    try {
+      await axios.put(`${API}/users/online-status`, { is_online: newStatus });
+      setIsOnline(newStatus);
+      toast.success(newStatus ? "You are now Online — visible to contractors" : "You are now Offline");
+    } catch { toast.error("Failed to update status"); }
+  };
+
   const acceptJob = async (jobId) => {
+    if (subStatus?.status === "expired") {
+      toast.error("Subscription expired. Please renew to accept jobs.");
+      return;
+    }
     try {
       await axios.post(`${API}/jobs/${jobId}/accept`);
       toast.success("Job accepted!");
-      fetchJobs();
-      fetchMyJobs();
+      fetchJobs(); fetchMyJobs();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to accept job");
+      const detail = e?.response?.data?.detail || "";
+      if (detail.includes("SUBSCRIPTION_EXPIRED")) {
+        toast.error("Your subscription has expired. Please renew.");
+      } else if (detail.includes("already claimed")) {
+        toast.warning("Someone else got this emergency job first!");
+      } else {
+        toast.error(detail || "Failed to accept job");
+      }
     }
   };
 
@@ -112,141 +148,139 @@ export default function CrewDashboard() {
     try {
       await axios.post(`${API}/jobs/${jobId}/complete`);
       toast.success("Job marked as complete. Awaiting contractor verification.");
-      fetchMyJobs();
-      refreshUser();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed");
-    }
+      fetchMyJobs(); refreshUser();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const acceptedIds = myJobs.map(j => j.id);
+  const isExpired = subStatus?.status === "expired";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#020617]" style={{ fontFamily: "Inter, sans-serif" }}>
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        {/* Trial Banner */}
-        {trialInfo?.is_trial && trialInfo.days_remaining <= 7 && (
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 mb-4 flex items-center gap-3">
+        {/* Subscription Expired Banner */}
+        {isExpired && (
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-4 flex items-center gap-3" data-testid="subscription-expired-banner">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-700 dark:text-red-300">Subscription Expired</p>
+              <p className="text-xs text-red-600 dark:text-red-400">Renew to accept jobs and appear on the map</p>
+            </div>
+            <a href="/subscription"
+              className="bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
+              data-testid="renew-subscription-btn">
+              Renew Now
+            </a>
+          </div>
+        )}
+
+        {/* Trial Warning */}
+        {subStatus?.status === "trial" && subStatus.days_remaining <= 7 && (
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 rounded-xl p-3 mb-4 flex items-center gap-3">
             <Clock className="w-5 h-5 text-amber-500 flex-shrink-0" />
             <p className="text-sm text-amber-700 dark:text-amber-300">
-              <strong>{trialInfo.days_remaining} days</strong> left in your free trial.
+              <strong>{subStatus.days_remaining} days</strong> left in your free trial.
               <a href="/subscription" className="ml-2 underline font-semibold">Subscribe now</a>
             </p>
           </div>
         )}
 
-        {/* Profile Incomplete Warning */}
-        {!profileComplete && (
-          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-3 mb-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-[#0000FF] flex-shrink-0" />
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Complete your profile to get better job matches.
-              <a href="/profile" className="ml-2 underline font-semibold">Complete profile</a>
-            </p>
-          </div>
-        )}
-
-        {/* Header */}
+        {/* Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-2xl font-extrabold text-[#050A30] dark:text-white" style={{ fontFamily: "Manrope, sans-serif" }}>
-              Good {new Date().getHours() < 12 ? "morning" : "afternoon"}, {user?.name?.split(" ")[0]}!
+              {user?.name?.split(" ")[0]}'s Dashboard
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <p className="text-sm text-slate-500 flex items-center gap-1">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-400"}`} />
               {connected ? "Live updates active" : "Connecting..."}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Online/Offline Toggle */}
+            <button onClick={toggleOnlineStatus}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border-2 transition-all ${isOnline ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500"}`}
+              data-testid="online-status-toggle">
+              {isOnline ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+              {isOnline ? "Online" : "Offline"}
+            </button>
+
+            {/* Location Toggle */}
+            <button onClick={toggleLocation}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border-2 transition-all ${locationEnabled ? "bg-blue-600 border-blue-600 text-white" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500"}`}
+              data-testid="location-toggle">
+              <Navigation className="w-4 h-4" />
+              {locationEnabled ? "GPS On" : "Enable GPS"}
+            </button>
+
+            {/* Map/List Toggle */}
             <div className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
-              <button
-                onClick={() => setView("map")}
+              <button onClick={() => setView("map")}
                 className={`px-3 py-1.5 rounded text-sm font-semibold flex items-center gap-1 transition-colors ${view === "map" ? "bg-[#0000FF] text-white" : "text-slate-500"}`}
-                data-testid="view-map-btn"
-              >
+                data-testid="view-map-btn">
                 <MapPin className="w-4 h-4" /> Map
               </button>
-              <button
-                onClick={() => setView("list")}
+              <button onClick={() => setView("list")}
                 className={`px-3 py-1.5 rounded text-sm font-semibold flex items-center gap-1 transition-colors ${view === "list" ? "bg-[#0000FF] text-white" : "text-slate-500"}`}
-                data-testid="view-list-btn"
-              >
+                data-testid="view-list-btn">
                 <List className="w-4 h-4" /> List
               </button>
             </div>
-            <button
-              onClick={() => setSmartMatch(!smartMatch)}
+
+            <button onClick={() => setSmartMatch(!smartMatch)}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${smartMatch ? "bg-[#7EC8E3] text-[#050A30] border-[#7EC8E3]" : "bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}
-              data-testid="smart-match-btn"
-              title="AI Smart Matching"
-            >
-              <Zap className="w-4 h-4" /> AI Match
+              data-testid="smart-match-btn">
+              <Zap className="w-4 h-4" /> AI
             </button>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters Row */}
         <div className="flex flex-wrap gap-2 mb-4">
           {TRADES.map(t => (
-            <button
-              key={t}
-              onClick={() => { setTradeFilter(t); }}
+            <button key={t} onClick={() => setTradeFilter(t)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${tradeFilter === t ? "bg-[#050A30] text-white border-[#050A30]" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400"}`}
-              data-testid={`filter-trade-${t.toLowerCase()}`}
-            >
+              data-testid={`filter-trade-${t.toLowerCase().replace(" ", "-")}`}>
               {t}
             </button>
           ))}
-          <select
-            value={radius}
-            onChange={e => setRadius(Number(e.target.value))}
+          <select value={radius} onChange={e => setRadius(Number(e.target.value))}
             className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-            data-testid="radius-select"
-          >
+            data-testid="radius-select">
             <option value={10}>10 mi</option>
             <option value={25}>25 mi</option>
             <option value={50}>50 mi</option>
             <option value={100}>100 mi</option>
           </select>
-          <button onClick={fetchJobs} className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 flex items-center gap-1" data-testid="refresh-btn">
+          <button onClick={fetchJobs}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 flex items-center gap-1"
+            data-testid="refresh-btn">
             <RefreshCw className="w-3 h-3" /> Refresh
           </button>
         </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Job List / Map */}
+          {/* Map / Job List */}
           <div className="lg:col-span-2">
             {view === "map" ? (
-              <JobMap
-                jobs={jobs}
-                userLocation={userLocation}
-                onJobClick={setSelectedJob}
-                height="500px"
-              />
+              <JobMap jobs={jobs} userLocation={locationEnabled ? userLocation : null} onJobClick={setSelectedJob} height="500px" />
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                 {loading ? (
-                  Array(3).fill(0).map((_, i) => (
-                    <div key={i} className="card p-4 animate-pulse h-32 bg-slate-200 dark:bg-slate-800" />
-                  ))
+                  Array(3).fill(0).map((_, i) => <div key={i} className="card p-4 animate-pulse h-32 bg-slate-200 dark:bg-slate-800" />)
                 ) : jobs.length === 0 ? (
                   <div className="card p-10 text-center">
                     <MapPin className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500 font-semibold">No jobs found nearby</p>
-                    <p className="text-slate-400 text-sm mt-1">Try expanding your search radius</p>
+                    <p className="text-slate-500 font-semibold">No jobs found</p>
+                    <p className="text-slate-400 text-sm mt-1">Try enabling GPS or expanding radius</p>
                   </div>
                 ) : jobs.map(job => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    onAccept={acceptJob}
-                    onComplete={completeJob}
-                    currentUser={user}
-                    isAccepted={acceptedIds.includes(job.id)}
-                  />
+                  <JobCard key={job.id} job={job} onAccept={acceptJob} onComplete={completeJob}
+                    currentUser={user} isAccepted={acceptedIds.includes(job.id)} isExpired={isExpired} />
                 ))}
               </div>
             )}
@@ -254,6 +288,44 @@ export default function CrewDashboard() {
 
           {/* Sidebar */}
           <div className="space-y-4">
+            {/* Profile Completion */}
+            {profileCompletion && !profileCompletion.is_complete && (
+              <div className="card p-4" data-testid="profile-completion-panel">
+                <h3 className="font-bold text-[#050A30] dark:text-white text-sm mb-3 flex items-center gap-2" style={{ fontFamily: "Manrope, sans-serif" }}>
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  Profile Completion ({profileCompletion.percentage}%)
+                </h3>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-3">
+                  <div className="bg-[#0000FF] h-2 rounded-full transition-all" style={{ width: `${profileCompletion.percentage}%` }} />
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { key: "photo", icon: Camera, label: "Profile Photo" },
+                    { key: "phone", icon: Phone, label: "Phone Number" },
+                    { key: "address", icon: MapPin, label: "Location/Address" },
+                    { key: "skills", icon: Briefcase, label: "Trade/Skills" },
+                    { key: "bio", icon: FileText, label: "Bio" },
+                  ].map(({ key, icon: Icon, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      {profileCompletion.checks[key] ? (
+                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
+                      )}
+                      <span className={`text-xs ${profileCompletion.checks[key] ? "text-slate-400 line-through" : "text-slate-600 dark:text-slate-300"}`}>
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <a href="/profile"
+                  className="mt-3 block text-center text-xs font-bold text-[#0000FF] hover:underline"
+                  data-testid="complete-profile-link">
+                  Complete Profile →
+                </a>
+              </div>
+            )}
+
             {/* Quick Stats */}
             <div className="card p-4">
               <h3 className="font-bold text-[#050A30] dark:text-white text-sm mb-3" style={{ fontFamily: "Manrope, sans-serif" }}>Your Stats</h3>
@@ -285,13 +357,7 @@ export default function CrewDashboard() {
               ) : (
                 <div className="space-y-2">
                   {myJobs.filter(j => ["in_progress", "fulfilled", "open"].includes(j.status)).map(job => (
-                    <JobCard
-                      key={job.id}
-                      job={job}
-                      onComplete={completeJob}
-                      currentUser={user}
-                      isAccepted={true}
-                    />
+                    <JobCard key={job.id} job={job} onComplete={completeJob} currentUser={user} isAccepted={true} />
                   ))}
                 </div>
               )}
@@ -312,24 +378,25 @@ export default function CrewDashboard() {
         {selectedJob && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedJob(null)}>
             <div className="card max-w-md w-full p-6 relative" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setSelectedJob(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setSelectedJob(null)} className="absolute top-4 right-4 text-slate-400"><X className="w-5 h-5" /></button>
+              {selectedJob.is_emergency && (
+                <div className="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold px-3 py-1 rounded-full inline-flex items-center gap-1 mb-3">
+                  <AlertTriangle className="w-3 h-3" /> EMERGENCY JOB
+                </div>
+              )}
               <h2 className="font-extrabold text-[#050A30] dark:text-white text-xl mb-1" style={{ fontFamily: "Manrope, sans-serif" }}>{selectedJob.title}</h2>
               <p className="text-slate-500 text-sm mb-4">{selectedJob.contractor_name}</p>
               <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{selectedJob.description}</p>
               <div className="space-y-2 text-sm mb-6">
                 <div className="flex justify-between"><span className="text-slate-500">Pay Rate:</span><span className="font-bold text-[#0000FF]">${selectedJob.pay_rate}/hr</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Trade:</span><span className="font-semibold capitalize">{selectedJob.trade}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Location:</span><span>{selectedJob.location?.address}</span></div>
               </div>
               {selectedJob.status === "open" && !acceptedIds.includes(selectedJob.id) && (
-                <button
-                  onClick={() => { acceptJob(selectedJob.id); setSelectedJob(null); }}
-                  className="w-full bg-[#0000FF] text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
-                  data-testid="modal-accept-job"
-                >
-                  Accept This Job
+                <button onClick={() => { acceptJob(selectedJob.id); setSelectedJob(null); }}
+                  disabled={isExpired}
+                  className={`w-full py-3 rounded-xl font-bold transition-colors ${isExpired ? "bg-slate-300 text-slate-500 cursor-not-allowed" : selectedJob.is_emergency ? "bg-red-600 text-white hover:bg-red-700" : "bg-[#0000FF] text-white hover:bg-blue-700"}`}
+                  data-testid="modal-accept-job">
+                  {isExpired ? "Subscription Expired" : selectedJob.is_emergency ? "Accept Emergency Job" : "Accept This Job"}
                 </button>
               )}
             </div>

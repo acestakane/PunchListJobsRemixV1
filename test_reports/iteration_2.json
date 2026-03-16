@@ -1,0 +1,128 @@
+{
+  "summary": "Complete backend + frontend testing of TheDayLaborers new features. All 40 backend tests pass (100%). Frontend tested: landing page, crew dashboard (online toggle, GPS toggle, profile completion), contractor dashboard (post job, emergency job, duplicate job, crew search with location, crew cards View/Share/Request), subscription page (CashApp Pay, annual plan). Two code bugs found and reported.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "N/A - Registration flow",
+        "issue": "UserCreate model missing 'trade' field. Trade selected during crew registration is never saved to the user document. auth_routes.py always sets trade='' in user_doc regardless of input. Profile completion Trade/Skills check is always False at registration.",
+        "priority": "MEDIUM"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "JobCard.jsx",
+        "issue": "STATUS_LABELS defined in ContractorDashboard.jsx ('open'→'Posted', 'fulfilled'→'Accepted', 'in_progress'→'In Progress', 'completed_pending_review'→'Completed', 'completed'→'Verified') are NEVER passed to or used by JobCard.jsx. JobCard displays raw status via {job.status?.replace('_', ' ')} showing 'open', 'fulfilled', 'in progress' instead of the intended human-readable labels.",
+        "selector": "[data-testid^='job-card-']",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "CrewDashboard.jsx - Rating stat",
+        "issue": "New crew members show '0.0' rating instead of '—' or 'New'. user?.rating?.toFixed(1) returns '0.0' (truthy) so || '—' never triggers. Should check rating_count > 0 before showing numeric rating.",
+        "selector": ".text-amber-500",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Auth page",
+        "issues": ["Uses browser native datetime-local picker for job start time (carried from iteration 1)"]
+      }
+    ]
+  },
+  "test_results": {
+    "backend": {
+      "total": 40,
+      "passed": 40,
+      "failed": 0,
+      "tests": [
+        "Health check /api/ → operational",
+        "Register crew → 201 + JWT token",
+        "Register contractor → 201 + JWT token",
+        "Login returns JWT bearer token",
+        "Invalid login returns 401",
+        "Subscription status structure (status, days_remaining)",
+        "Profile completion returns percentage + 5 checks (photo, phone, address, skills, bio)",
+        "Online status toggle PUT /api/users/online-status → True/False",
+        "Crew search by trade, name, address",
+        "Create regular job (contractor) → 201",
+        "Create emergency job (is_emergency=true) → 201",
+        "Crew cannot create jobs → 403",
+        "Job duplication → 201, title has (Copy), crew_accepted=[], is_emergency=false",
+        "Crew cannot duplicate jobs → 403",
+        "Emergency job accept (atomic race lock) → 200",
+        "Second accept on filled emergency job → 409",
+        "Full job workflow: accept → start → complete → verify → status=completed",
+        "Payment plans include annual plan ($699.99, 365 days)",
+        "All plan amounts correct (daily=4.99, weekly=24.99, monthly=79.99, annual=699.99)",
+        "Square create-link returns square.link URL → 200",
+        "Square invalid plan → 400",
+        "Subscription gating: expired user cannot post jobs → 403 + SUBSCRIPTION_EXPIRED"
+      ]
+    },
+    "frontend": {
+      "total_flows": 12,
+      "passed": 12,
+      "failed": 0,
+      "flows": [
+        "Landing page loads with hero, nav, CTA buttons",
+        "Auth page: register crew/contractor with role selection",
+        "Crew dashboard: Online/Offline toggle (Online→Offline→Online works)",
+        "Crew dashboard: GPS toggle present ('Enable GPS')",
+        "Crew dashboard: Profile completion panel at 20% with 5 checklist items",
+        "Crew dashboard: Complete Profile link navigates to profile",
+        "Contractor dashboard: Post Job button + job creation form",
+        "Contractor dashboard: Emergency job toggle ('Send Emergency Alert' button text)",
+        "Contractor dashboard: Job duplication (Copy icon, 'Job duplicated and reposted!' toast)",
+        "Contractor dashboard: Crew search with name/trade/location fields + Search Crew button",
+        "Contractor dashboard: Crew cards with View/Share/Request buttons",
+        "Subscription page: 4 plans (daily/weekly/monthly/annual), CashApp Pay default, annual=$699.99"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features_results.xml"
+  ],
+  "action_items": [
+    "FIX: Add 'trade: Optional[str] = None' to UserCreate model in models.py and use 'data.trade or ''  in auth_routes.py user_doc to save trade during registration",
+    "FIX: Pass STATUS_LABELS to JobCard.jsx or use them inside JobCard - show 'Posted' instead of 'open', 'Accepted' instead of 'fulfilled', 'Verified' instead of 'completed'",
+    "MINOR: Fix crew member Rating display - show 'New' instead of '0.0' for users with rating_count == 0"
+  ],
+  "critical_code_review_comments": [
+    "MEDIUM: UserCreate model (models.py) missing 'trade' field → trade selected in registration form never saved → Skills/Trade profile completion check always starts as False even if user selected a trade",
+    "MEDIUM: STATUS_LABELS in ContractorDashboard.jsx is dead code - never passed to or used by JobCard.jsx. Jobs show raw 'open'/'fulfilled'/'in_progress' instead of 'Posted'/'Accepted'/'In Progress'",
+    "LOW: New crew member rating shows '0.0' instead of 'New/—' because rating=0.0 (falsy check on number fails)",
+    "INFO: Square payment uses production credentials and returns real square.link short URLs - working correctly",
+    "INFO: WebSocket has 2 retry attempts before connecting on initial load - not critical, reconnects successfully",
+    "INFO: PayPal client ID hardcoded in SubscriptionPage.jsx (public client ID, acceptable for frontend)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (40/40 tests pass)",
+    "frontend": "100% (all critical flows work, 2 UX bugs found)"
+  },
+  "seed_data_creation": "Multiple TEST_ prefixed users and jobs created during testing. Crew users: uitest_crew_*, crewtest_*, subtest_*. Contractors: contractor_test_*, duptest_*.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All new P0 features tested and working: subscription gating, profile completion, online toggle, GPS toggle, crew search with address, job duplication, emergency job race lock, job workflow, Square/CashApp payment, annual plan. Two medium bugs found: (1) trade not saved at registration, (2) STATUS_LABELS not used in JobCard. Backend tests in /app/backend/tests/test_new_features.py (40 tests, 100% passing).",
+  "rca_of_issues": {
+    "trade_not_saved": {
+      "bug": "Trade selected at crew registration is never saved",
+      "root_cause": "UserCreate pydantic model (models.py line 17-23) does not include 'trade' field. auth_routes.py user_doc always sets 'trade': '' hardcoded. Frontend sends trade in payload (AuthPage.jsx line 41-43) but backend ignores it.",
+      "reproduction": "Register as crew, select a trade, check /api/users/profile-completion → skills check is always False",
+      "fix": "1. Add 'trade: Optional[str] = None' to UserCreate model. 2. In auth_routes.py user_doc, change '\"trade\": \"\"' to '\"trade\": data.trade or \"\"'"
+    },
+    "status_labels_unused": {
+      "bug": "Job status shows raw database values instead of user-friendly labels",
+      "root_cause": "STATUS_LABELS dict defined in ContractorDashboard.jsx but never used. JobCard.jsx uses {job.status?.replace('_', ' ')} directly.",
+      "reproduction": "Post a job as contractor → status shows 'open' not 'Posted'",
+      "fix": "Either pass statusLabel prop to JobCard, or define STATUS_LABELS inside JobCard.jsx and use it for display"
+    }
+  }
+}

@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from database import db
 from auth import get_current_user, user_to_response
-from models import ProfileUpdate, LocationUpdate
+from models import ProfileUpdate, LocationUpdate, OnlineStatusUpdate
 from typing import Optional
 import logging
 
@@ -19,9 +19,37 @@ PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 LOGO_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def calc_profile_completion(user: dict) -> dict:
+    """Calculate profile completion percentage and missing fields."""
+    checks = {
+        "photo": bool(user.get("profile_photo") or user.get("logo")),
+        "phone": bool(user.get("phone")),
+        "address": bool(user.get("location") or user.get("address")),
+        "skills": bool(user.get("skills") or user.get("trade")),
+        "bio": bool(user.get("bio")),
+    }
+    completed = sum(1 for v in checks.values() if v)
+    pct = int((completed / len(checks)) * 100)
+    return {"percentage": pct, "checks": checks, "is_complete": pct == 100}
+
+
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     return user_to_response(current_user)
+
+
+@router.get("/profile-completion")
+async def get_profile_completion(current_user: dict = Depends(get_current_user)):
+    return calc_profile_completion(current_user)
+
+
+@router.put("/online-status")
+async def set_online_status(data: OnlineStatusUpdate, current_user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"is_online": data.is_online, "availability": data.is_online}}
+    )
+    return {"is_online": data.is_online}
 
 
 @router.put("/profile")
@@ -80,6 +108,7 @@ async def upload_photo(file: UploadFile = File(...), current_user: dict = Depend
 async def search_crew(
     trade: Optional[str] = None,
     name: Optional[str] = None,
+    address: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
     radius: Optional[float] = 50,
@@ -88,18 +117,44 @@ async def search_crew(
 ):
     query = {"role": "crew", "is_active": True}
     if trade:
-        query["trade"] = {"$regex": trade, "$options": "i"}
+        query["$or"] = [
+            {"trade": {"$regex": trade, "$options": "i"}},
+            {"skills": {"$elemMatch": {"$regex": trade, "$options": "i"}}}
+        ]
     if name:
         query["name"] = {"$regex": name, "$options": "i"}
     if available_only:
-        query["availability"] = True
+        query["$and"] = query.get("$and", []) + [{"$or": [{"availability": True}, {"is_online": True}]}]
+
+    # Only show crew with reasonably complete profiles (phone or trade set)
+    query["$and"] = query.get("$and", []) + [
+        {"$or": [{"phone": {"$exists": True, "$ne": None}}, {"trade": {"$exists": True, "$ne": ""}}]}
+    ]
 
     crew = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
+
+    # Geocode address search if provided and no lat/lng
+    if address and not (lat and lng):
+        try:
+            from utils.geocoding import geocode_address
+            geo = await geocode_address(address)
+            lat, lng = geo.get("lat"), geo.get("lng")
+        except Exception:
+            pass
 
     if lat and lng:
         from utils.geocoding import haversine_distance
         crew = [c for c in crew if c.get("location") and
                 haversine_distance(lat, lng, c["location"]["lat"], c["location"]["lng"]) <= radius]
+
+    # Mask exact location for privacy - round to 2 decimal places (~1km precision)
+    for c in crew:
+        if c.get("location") and c.get("hide_location"):
+            c["location"] = {
+                "lat": round(c["location"]["lat"], 2),
+                "lng": round(c["location"]["lng"], 2),
+                "city": c["location"].get("city", "")
+            }
 
     return crew
 

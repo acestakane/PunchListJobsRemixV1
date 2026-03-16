@@ -9,6 +9,8 @@ from pathlib import Path
 import uuid
 from auth import hash_password
 from database import db
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -58,6 +60,24 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+scheduler = AsyncIOScheduler()
+
+
+async def hide_old_completed_jobs():
+    """Cron job: hide completed jobs older than 12 hours."""
+    try:
+        settings = await db.settings.find_one({}, {"_id": 0})
+        hours = settings.get("job_visibility_hours", 12) if settings else 12
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        result = await db.jobs.update_many(
+            {"status": "completed", "completed_at": {"$lt": cutoff}, "is_hidden": {"$ne": True}},
+            {"$set": {"is_hidden": True}}
+        )
+        if result.modified_count > 0:
+            logger.info(f"Cron: hid {result.modified_count} completed jobs older than {hours}h")
+    except Exception as e:
+        logger.error(f"Cron job error: {e}")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -68,6 +88,7 @@ async def startup_event():
         await db.jobs.create_index("status")
         await db.jobs.create_index("contractor_id")
         await db.jobs.create_index("created_at")
+        await db.jobs.create_index([("completed_at", 1), ("status", 1)])
         logger.info("Database indexes created")
     except Exception as e:
         logger.warning(f"Index creation: {e}")
@@ -79,7 +100,6 @@ async def startup_event():
     if not existing_admin:
         import random, string
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-        from datetime import datetime, timezone, timedelta
         now = datetime.now(timezone.utc).isoformat()
         admin_doc = {
             "id": str(uuid.uuid4()),
@@ -100,7 +120,7 @@ async def startup_event():
             "referral_code": code,
             "referred_by": None,
             "bio": "", "trade": "", "skills": [], "profile_photo": None,
-            "availability": True, "location": None,
+            "availability": True, "is_online": True, "location": None,
             "rating": 0.0, "rating_count": 0, "jobs_completed": 0,
             "company_name": "", "logo": None, "hide_location": False, "favorite_crew": []
         }
@@ -114,15 +134,26 @@ async def startup_event():
             "daily_price": 4.99,
             "weekly_price": 24.99,
             "monthly_price": 79.99,
+            "annual_price": 699.99,
             "trial_days": 30,
             "job_visibility_hours": 12
         })
         logger.info("Default settings created")
+    else:
+        # Add annual_price if missing
+        if not existing_settings.get("annual_price"):
+            await db.settings.update_one({}, {"$set": {"annual_price": 699.99}})
+
+    # Start cron scheduler
+    scheduler.add_job(hide_old_completed_jobs, "interval", hours=1, id="hide_jobs_cron", replace_existing=True)
+    scheduler.start()
+    logger.info("Scheduler started: hide_jobs_cron every hour")
 
     logger.info("TheDayLaborers API started successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    scheduler.shutdown(wait=False)
     from database import client
     client.close()

@@ -18,10 +18,34 @@ def now_str():
     return datetime.now(timezone.utc).isoformat()
 
 
+def check_subscription(user: dict):
+    """Raise 403 if user subscription is expired."""
+    status = user.get("subscription_status", "trial")
+    if status == "expired":
+        raise HTTPException(
+            status_code=403,
+            detail="SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue."
+        )
+    # Check if trial/subscription end date has passed
+    end_field = "subscription_end" if status == "active" else "trial_end_date"
+    end_date = user.get(end_field)
+    if end_date and status in ("active", "trial"):
+        try:
+            end = datetime.fromisoformat(end_date)
+            if end < datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=403,
+                    detail="SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue."
+                )
+        except ValueError:
+            pass
+
+
 @router.post("/", status_code=201)
 async def create_job(data: JobCreate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "contractor":
         raise HTTPException(status_code=403, detail="Only contractors can post jobs")
+    check_subscription(current_user)
 
     # Geocode the address
     location = await geocode_address(data.address)
@@ -68,7 +92,7 @@ async def list_jobs(
     smart_match: Optional[bool] = False,
     current_user: dict = Depends(get_current_user)
 ):
-    query = {}
+    query = {"is_hidden": {"$ne": True}}
 
     if current_user["role"] == "contractor":
         # Contractors only see their own jobs
@@ -87,7 +111,7 @@ async def list_jobs(
 
     # Filter by radius if location provided
     if lat and lng:
-        jobs = [j for j in jobs if haversine_distance(
+        jobs = [j for j in jobs if j.get("location") and haversine_distance(
             lat, lng, j["location"]["lat"], j["location"]["lng"]
         ) <= radius]
 
@@ -146,10 +170,55 @@ async def delete_job(job_id: str, current_user: dict = Depends(get_current_user)
     return {"message": "Job deleted"}
 
 
+@router.post("/{job_id}/duplicate", status_code=201)
+async def duplicate_job(job_id: str, current_user: dict = Depends(get_current_user)):
+    """Duplicate an existing job to quickly repost it."""
+    if current_user["role"] != "contractor":
+        raise HTTPException(status_code=403, detail="Only contractors can duplicate jobs")
+    check_subscription(current_user)
+
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["contractor_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    new_job = {
+        "id": str(uuid.uuid4()),
+        "contractor_id": job["contractor_id"],
+        "contractor_name": job["contractor_name"],
+        "title": f"{job['title']} (Copy)",
+        "description": job["description"],
+        "trade": job["trade"],
+        "crew_needed": job["crew_needed"],
+        "crew_accepted": [],
+        "start_time": job["start_time"],
+        "pay_rate": job["pay_rate"],
+        "location": job["location"],
+        "status": "open",
+        "is_emergency": False,
+        "created_at": now_str(),
+        "completed_at": None,
+        "rated_crew": [],
+        "rated_by_crew": [],
+        "is_hidden": False,
+    }
+    await db.jobs.insert_one(new_job)
+
+    try:
+        from routes.ws_routes import manager
+        await manager.broadcast_new_job(new_job)
+    except Exception:
+        pass
+
+    return {k: v for k, v in new_job.items() if k != "_id"}
+
+
 @router.post("/{job_id}/accept")
 async def accept_job(job_id: str, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "crew":
         raise HTTPException(status_code=403, detail="Only crew members can accept jobs")
+    check_subscription(current_user)
 
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
@@ -159,13 +228,29 @@ async def accept_job(job_id: str, current_user: dict = Depends(get_current_user)
     if current_user["id"] in job["crew_accepted"]:
         raise HTTPException(status_code=400, detail="Already accepted this job")
 
-    new_crew = job["crew_accepted"] + [current_user["id"]]
-    new_status = "fulfilled" if len(new_crew) >= job["crew_needed"] else "open"
-
-    await db.jobs.update_one(
-        {"id": job_id},
-        {"$set": {"crew_accepted": new_crew, "status": new_status}}
-    )
+    if job.get("is_emergency"):
+        # Atomic race-lock for emergency jobs: only first crew member wins
+        result = await db.jobs.find_one_and_update(
+            {
+                "id": job_id,
+                "status": {"$in": ["open", "fulfilled"]},
+                "crew_accepted": {"$not": {"$elemMatch": {"$eq": current_user["id"]}}},
+                "$expr": {"$lt": [{"$size": "$crew_accepted"}, "$crew_needed"]}
+            },
+            {"$push": {"crew_accepted": current_user["id"]}, "$set": {"status": "fulfilled"}},
+            return_document=True
+        )
+        if not result:
+            raise HTTPException(status_code=409, detail="Emergency job already claimed or slot unavailable")
+        new_crew = result["crew_accepted"]
+        new_status = result["status"]
+    else:
+        new_crew = job["crew_accepted"] + [current_user["id"]]
+        new_status = "fulfilled" if len(new_crew) >= job["crew_needed"] else "open"
+        await db.jobs.update_one(
+            {"id": job_id},
+            {"$set": {"crew_accepted": new_crew, "status": new_status}}
+        )
 
     # Notify contractor via WebSocket
     try:
