@@ -27,13 +27,57 @@ async def get_analytics(admin: dict = Depends(require_admin)):
     total_jobs = await db.jobs.count_documents({})
     active_subs = await db.users.count_documents({"subscription_status": "active"})
     trial_subs = await db.users.count_documents({"subscription_status": "trial"})
+    expired_subs = await db.users.count_documents({"subscription_status": "expired"})
 
     # Revenue from payments
     payments = await db.payment_transactions.find(
         {"payment_status": "paid"},
-        {"_id": 0, "amount": 1}
+        {"_id": 0, "amount": 1, "plan": 1, "payment_method": 1, "created_at": 1}
     ).to_list(1000)
     total_revenue = sum(p.get("amount", 0) for p in payments)
+
+    # Revenue by method
+    revenue_by_method = {}
+    for p in payments:
+        m = p.get("payment_method", "unknown")
+        revenue_by_method[m] = round(revenue_by_method.get(m, 0) + p.get("amount", 0), 2)
+
+    # Crew utilization: % of crew members who have completed at least 1 job
+    active_crew = await db.users.count_documents({"role": "crew", "jobs_completed": {"$gt": 0}})
+    crew_utilization = round((active_crew / crew_count * 100) if crew_count > 0 else 0, 1)
+
+    # Online crew count
+    online_crew = await db.users.count_documents({"role": "crew", "is_online": True})
+
+    # Job completion rate
+    job_completion_rate = round((completed_jobs / total_jobs * 100) if total_jobs > 0 else 0, 1)
+
+    # Top contractors by spend
+    top_contractors = await db.payment_transactions.aggregate([
+        {"$match": {"payment_status": "paid"}},
+        {"$group": {"_id": "$user_id", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 5}
+    ]).to_list(5)
+
+    # Enrich with user names
+    for c in top_contractors:
+        u = await db.users.find_one({"id": c["_id"]}, {"_id": 0, "name": 1, "company_name": 1})
+        c["name"] = (u.get("company_name") or u.get("name", "Unknown")) if u else "Unknown"
+        c["total"] = round(c["total"], 2)
+
+    # Top crew by jobs completed
+    top_crew = await db.users.find(
+        {"role": "crew"},
+        {"_id": 0, "name": 1, "jobs_completed": 1, "rating": 1, "trade": 1}
+    ).sort("jobs_completed", -1).limit(5).to_list(5)
+
+    # Jobs by trade
+    jobs_by_trade = await db.jobs.aggregate([
+        {"$group": {"_id": "$trade", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 8}
+    ]).to_list(8)
 
     # Recent activity
     recent_users = await db.users.find(
@@ -49,7 +93,15 @@ async def get_analytics(admin: dict = Depends(require_admin)):
         "total_jobs": total_jobs,
         "active_subscriptions": active_subs,
         "trial_subscriptions": trial_subs,
+        "expired_subscriptions": expired_subs,
         "total_revenue": round(total_revenue, 2),
+        "revenue_by_method": revenue_by_method,
+        "crew_utilization": crew_utilization,
+        "online_crew": online_crew,
+        "job_completion_rate": job_completion_rate,
+        "top_contractors": top_contractors,
+        "top_crew": top_crew,
+        "jobs_by_trade": [{"trade": j["_id"] or "other", "count": j["count"]} for j in jobs_by_trade],
         "recent_users": recent_users
     }
 

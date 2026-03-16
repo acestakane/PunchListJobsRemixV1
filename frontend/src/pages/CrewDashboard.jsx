@@ -335,7 +335,7 @@ export default function CrewDashboard() {
                   <div className="text-xs text-slate-500">Jobs Done</div>
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-extrabold text-amber-500">{user?.rating?.toFixed(1) || "—"}</div>
+                  <div className="text-2xl font-extrabold text-amber-500">{user?.rating_count > 0 ? user.rating.toFixed(1) : "—"}</div>
                   <div className="text-xs text-slate-500">Rating</div>
                 </div>
                 <div className="bg-emerald-50 dark:bg-emerald-950 rounded-lg p-3 text-center">

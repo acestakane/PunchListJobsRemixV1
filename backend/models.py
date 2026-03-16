@@ -20,6 +20,8 @@ class UserCreate(BaseModel):
     role: str  # crew, contractor, admin
     name: str
     phone: Optional[str] = None
+    trade: Optional[str] = None
+    bio: Optional[str] = None
     referral_code_used: Optional[str] = None
     company_name: Optional[str] = None
 

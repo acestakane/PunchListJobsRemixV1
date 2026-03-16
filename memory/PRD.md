@@ -1,148 +1,198 @@
-# TheDayLaborers - A Blue Collar ME Company
-## Product Requirements Document
+# TheDayLaborers Platform - PRD
 
-**Last Updated:** March 2025
-**Status:** MVP Complete
+## Product Overview
+On-demand workforce marketplace connecting Crew Members (workers), Contractors (businesses), and Administrators. Similar to catchoutcrew.com.
+
+## Tech Stack
+- **Backend**: Python 3.11 + FastAPI + MongoDB (Motor async)
+- **Frontend**: React + TailwindCSS + Lucide Icons
+- **Auth**: JWT (Bearer token)
+- **Maps**: Leaflet.js + OpenStreetMap
+- **Payments**: Stripe (test), PayPal (sandbox), Square/CashApp Pay (production)
+- **Real-time**: WebSockets
+- **Emails**: Resend API
+- **AI**: OpenAI GPT-4o (job matching)
+- **Scheduler**: APScheduler (cron jobs)
+
+## User Roles
+1. **Crew** - Workers who accept jobs, build profiles, earn ratings
+2. **Contractor** - Businesses posting jobs, searching crew, managing workflow
+3. **Admin** - Platform management, analytics, settings
 
 ---
 
-## Problem Statement
-Build a scalable on-demand workforce marketplace connecting Crew Members (workers), Contractors (businesses), and Administrators. The platform supports real-time job dispatch, live maps, and instant job acceptance similar to CatchOutCrew.com and PeopleReady.com.
+## ✅ Implemented Features
+
+### Authentication
+- JWT-based auth with role-based access
+- Registration (crew/contractor) with trade/bio fields saved
+- 30-day free trial on signup with welcome points (50)
+- Referral code system (100 points per referral)
+
+### Subscription System
+- Plans: Daily ($4.99), Weekly ($24.99), Monthly ($79.99), Annual ($699.99)
+- Subscription gating: expired users CANNOT post jobs or accept jobs (403 SUBSCRIPTION_EXPIRED)
+- Trial + active subscription status tracking
+- Subscription expiry auto-detect and status update
+- Payment methods: Stripe (card), PayPal, Square/CashApp Pay
+- Square/CashApp: production credentials integrated, payment link flow
+
+### Profile System
+- Profile completion checklist: Photo, Phone, Address, Skills, Bio (5 checks)
+- Completion percentage calculated server-side
+- Profile completion panel shown in crew dashboard until complete
+- Trade saved during registration
+
+### Location Features
+- GPS enable/disable toggle (browser geolocation)
+- Location masking (rounded to 2 decimal places for privacy)
+- Center map on user location
+- Address-based crew search with geocoding
+
+### Map Features
+- Live job map (OpenStreetMap + Leaflet)
+- Crew marker visibility based on online status
+- Radius filter for nearby jobs
+
+### Crew Dashboard
+- Online/Offline toggle (visible to contractors)
+- GPS location toggle
+- Profile completion checklist
+- Job filter by trade and radius
+- AI smart matching toggle
+- Real-time job notifications via WebSocket
+- Stats: jobs completed, rating, points, nearby jobs
+
+### Contractor Dashboard
+- Crew search by Name, Trade, Location (address geocoded)
+- Crew cards with View Profile, Share Profile, Request Crew buttons
+- Job creation with emergency/regular toggle
+- Job duplication (1-click repost with "(Copy)" suffix)
+- Job status display: Posted/Accepted/In Progress/Completed/Verified
+- Real-time notifications for job acceptance
+
+### Job Workflow
+- Posted (open) → Accepted (fulfilled) → In Progress (in_progress) → Completed (completed_pending_review) → Verified (completed)
+- Status labels displayed correctly in JobCard.jsx
+- Contractor: Start Job, Verify Complete
+- Crew: Accept Job, Mark Complete
+
+### Emergency Crew Request
+- `is_emergency: true` flag on job creation
+- Atomic MongoDB findOneAndUpdate race lock (first-to-accept wins)
+- 409 returned if slot already claimed
+- Red styling + EMERGENCY badge in UI
+
+### Admin Panel
+- Analytics: Total users, active jobs, revenue, crew utilization %, online crew, job completion rate
+- Jobs by trade bar chart
+- Top crew leaderboard
+- User management: suspend/activate/delete
+- Settings: pricing for all 4 plans, trial days, job visibility hours
+- Payments table with method breakdown
+
+### Cron Job
+- APScheduler runs every hour
+- Hides completed jobs older than job_visibility_hours (default 12 hours)
+- is_hidden field filters jobs from listings
+
+### Payments
+- Stripe: create session → webhook/status poll
+- PayPal: create order → capture
+- Square/CashApp: create-link → redirect → status check (order state)
+- Annual plan support
 
 ---
 
 ## Architecture
 
-### Tech Stack
-- **Frontend:** React 19, TailwindCSS, React-Leaflet (OpenStreetMap), Recharts, Sonner
-- **Backend:** FastAPI (Python), Motor (async MongoDB driver)
-- **Database:** MongoDB
-- **Real-time:** FastAPI WebSockets
-- **Payments:** Stripe (emergentintegrations), PayPal REST API (sandbox)
-- **Email:** Resend API
-- **AI:** OpenAI GPT-4o via emergentintegrations (Emergent LLM Key)
-- **Maps:** OpenStreetMap via React-Leaflet + Leaflet.js
-- **Auth:** JWT (python-jose + bcrypt)
+```
+/app
+├── backend/
+│   ├── routes/
+│   │   ├── auth_routes.py      # Register, login
+│   │   ├── job_routes.py       # CRUD, accept, start, complete, verify, duplicate, emergency
+│   │   ├── user_routes.py      # Profile, crew search, online status, completion
+│   │   ├── admin_routes.py     # Analytics, user mgmt, settings
+│   │   ├── payment_routes.py   # Stripe, PayPal, Square/CashApp
+│   │   └── ws_routes.py        # WebSocket manager
+│   ├── models.py               # Pydantic models
+│   ├── auth.py                 # JWT utils
+│   ├── database.py             # MongoDB connection
+│   ├── server.py               # FastAPI app + APScheduler
+│   └── utils/
+│       ├── geocoding.py        # Address geocoding + haversine
+│       ├── email_utils.py      # Resend email
+│       └── ai_utils.py         # OpenAI job matching
+└── frontend/
+    └── src/
+        ├── pages/
+        │   ├── LandingPage.jsx
+        │   ├── CrewDashboard.jsx       # Online toggle, GPS, profile completion
+        │   ├── ContractorDashboard.jsx # Crew cards, emergency, duplication
+        │   ├── AdminDashboard.jsx      # Analytics, settings, users
+        │   ├── SubscriptionPage.jsx    # Square/CashApp, annual plan
+        │   └── ProfilePage.jsx
+        └── components/
+            ├── JobCard.jsx             # Status labels, actions
+            ├── JobMap.jsx
+            └── Navbar.jsx
+```
 
-### URL Structure
-- Frontend: https://job-marketplace-61.preview.emergentagent.com
-- Backend API: https://job-marketplace-61.preview.emergentagent.com/api
-- WebSocket: wss://job-match-now.preview.emergentagent.com/api/ws/{token}
+## Key API Endpoints
+- `POST /api/auth/register` - Register with trade/bio
+- `POST /api/auth/login` - Get JWT
+- `GET /api/users/profile-completion` - Profile % + 5 checks
+- `PUT /api/users/online-status` - Set is_online
+- `GET /api/users/crew?name=&trade=&address=` - Search crew
+- `POST /api/jobs/` - Create job (gated)
+- `POST /api/jobs/{id}/accept` - Accept (atomic for emergency)
+- `POST /api/jobs/{id}/duplicate` - Duplicate
+- `POST /api/jobs/{id}/start` - Start (contractor)
+- `POST /api/jobs/{id}/verify` - Verify complete (contractor)
+- `GET /api/payments/plans` - daily/weekly/monthly/annual
+- `POST /api/payments/square/create-link` - CashApp/Square checkout
+- `GET /api/payments/square/status/{order_id}` - Check payment
+- `GET /api/admin/analytics` - Full platform analytics
+- WebSocket: `ws://host/api/ws?token=...`
 
----
+## DB Schema (key fields)
+- **users**: id, email, password_hash, role, name, phone, trade, bio, skills, profile_photo, availability, is_online, location, subscription_status, subscription_plan, subscription_end, trial_end_date, points, referral_code, rating, jobs_completed
+- **jobs**: id, contractor_id, title, trade, status, is_emergency, crew_accepted, crew_needed, pay_rate, location, start_time, is_hidden, completed_at
+- **payment_transactions**: id, user_id, plan, amount, payment_method, payment_status, session_id/order_id
 
-## User Personas
-
-### 1. Crew Member (Worker)
-- Blue collar professional seeking day work
-- Needs: See nearby jobs on map, accept quickly, track earnings/ratings
-- Mobile-first user
-
-### 2. Contractor (Business)
-- Construction company or business needing immediate labor
-- Needs: Post jobs fast, find qualified nearby workers, track job status
-- Mostly desktop, some mobile
-
-### 3. Administrator
-- Platform manager
-- Needs: Full platform control, analytics, user management, pricing config
-
----
-
-## Core Requirements (Static)
-
-1. ✅ JWT Authentication (Register/Login for crew/contractor/admin)
-2. ✅ Three-role system (crew, contractor, admin)
-3. ✅ Live job map (OpenStreetMap/Leaflet)
-4. ✅ Real-time WebSocket job updates
-5. ✅ Job workflow (open → fulfilled → in_progress → completed_pending_review → completed)
-6. ✅ Ratings system (mutual ratings after job completion)
-7. ✅ Subscription system (30-day trial + daily/weekly/monthly plans)
-8. ✅ PayPal sandbox payments
-9. ✅ Stripe payments (test mode via emergentintegrations)
-10. ✅ Admin dashboard with analytics
-11. ✅ Referral system with points economy
-12. ✅ AI-powered job matching (OpenAI GPT-4o)
-13. ✅ Email notifications (Resend API)
-14. ✅ Profile management with photo upload
-15. ✅ Geocoding via Nominatim (OpenStreetMap)
-16. ✅ Dark/light mode toggle
-17. ✅ Mobile-first responsive design
-18. ✅ PWA manifest
-
----
-
-## What's Been Implemented
-
-### Backend (FastAPI)
-- `server.py` - Main app, startup init (admin creation, indexes, settings)
-- `database.py` - MongoDB connection
-- `auth.py` - JWT helpers, password hashing, current_user dependency
-- `models.py` - Pydantic models for all requests
-- `routes/auth_routes.py` - Register, Login with referral code support
-- `routes/job_routes.py` - Full job CRUD + accept/start/complete/verify/rate
-- `routes/user_routes.py` - Profile management, crew search, favorites, location, referrals
-- `routes/admin_routes.py` - Analytics, user management, settings, terms, map data
-- `routes/payment_routes.py` - Stripe + PayPal create/capture/status + subscription management
-- `routes/ws_routes.py` - WebSocket connection manager with location tracking
-- `utils/email_utils.py` - Resend email notifications (welcome, job, subscription)
-- `utils/ai_utils.py` - OpenAI job matching and fraud detection
-- `utils/geocoding.py` - Nominatim geocoding + haversine distance
-
-### Frontend (React)
-- `App.js` - Router with protected routes, role-based redirects
-- `App.css` - Global styles with Manrope/Inter fonts
-- `contexts/AuthContext.jsx` - JWT auth state management
-- `contexts/ThemeContext.jsx` - Dark/light mode toggle
-- `contexts/WebSocketContext.jsx` - WebSocket connection with auto-reconnect
-- `components/Navbar.jsx` - Responsive nav with dropdown
-- `components/JobMap.jsx` - Leaflet map with custom pins for jobs/crew/user
-- `components/JobCard.jsx` - Job card with status-aware action buttons
-- `pages/LandingPage.jsx` - Hero + features + how-it-works + stats + footer
-- `pages/AuthPage.jsx` - Login/register with role selection (crew/contractor)
-- `pages/CrewDashboard.jsx` - Map + job list + filters + AI match + active jobs
-- `pages/ContractorDashboard.jsx` - 3-panel: crew search + map + job list + create modal
-- `pages/AdminDashboard.jsx` - Analytics + user table + settings + terms + payments
-- `pages/ProfilePage.jsx` - Profile edit + photo upload + skills + ratings + referral
-- `pages/SubscriptionPage.jsx` - Plan selection + PayPal + Stripe payment
+## Credentials
+- Admin: admin@thedaylaborers.com / Admin@123
+- Square Location: L6EF13P7EX9GN (Built By Purpose)
+- Stripe: test mode (emergent managed key)
+- PayPal: sandbox
 
 ---
 
-## Default Credentials
-- **Admin:** admin@thedaylaborers.com / Admin@123
-- **Subscription Plans:** Daily $4.99, Weekly $24.99, Monthly $79.99 (configurable)
-- **Trial Duration:** 30 days
+## P0 Backlog (Completed in current session)
+- ✅ Subscription gating
+- ✅ Profile completion checklist
+- ✅ Online/Offline toggle
+- ✅ GPS location toggle
+- ✅ Crew search fixed (name, trade, address)
+- ✅ Job workflow labels (Posted/Accepted/In Progress/Completed/Verified)
+- ✅ Emergency job with atomic race lock
+- ✅ Job duplication
+- ✅ Square/CashApp Pay integration
+- ✅ Annual subscription plan
+- ✅ Admin analytics enhanced (crew utilization, spending, completion rates)
+- ✅ APScheduler cron job (hide completed jobs after 12h)
+- ✅ Trade saved during registration
 
----
+## P1 Backlog (Remaining)
+- [ ] Contractor spending dashboard with charts (per contractor)
+- [ ] Crew reputation score (visible on cards)
+- [ ] SMS notifications via Twilio (no credentials provided)
+- [ ] In-app calling with masked numbers (no Twilio)
 
-## Prioritized Backlog
-
-### P0 (Critical - Launch Blockers)
-- [ ] Square payments integration (placeholder only, needs credentials)
-- [ ] Email verification flow (send code, verify endpoint)
-- [ ] Push notifications (PWA service worker)
-
-### P1 (Important - Post-Launch)
-- [ ] Advanced fraud detection with AI rules engine
-- [ ] Job history analytics for contractors (spending charts)
-- [ ] SMS notifications (Twilio integration)
-- [ ] Worker ID verification flow
-- [ ] Multi-image support for job posts
-
-### P2 (Nice to Have)
-- [ ] Native iOS/Android PWA full offline support
-- [ ] Advanced search with radius on maps
-- [ ] Chat between contractor and crew member
-- [ ] Shift scheduling / recurring jobs
-- [ ] Payroll integration (direct deposit to workers)
-
----
-
-## Next Tasks List
-1. Set up Square payment credentials and implement
-2. Add SMS notification via Twilio
-3. Set up email domain verification for Resend (currently using onboarding@resend.dev)
-4. Add job expiration cron (12-hour visibility after completion)
-5. Implement push notifications via service worker
-6. Add contractor analytics page (spending history, worker performance)
-7. Set up production MongoDB with proper authentication
+## P2 Future
+- [ ] React Native mobile app (iOS/Android)
+- [ ] AI-powered smart job matching enhancements
+- [ ] Google Auth / social login
+- [ ] Rate limiting middleware (FastAPI slowapi)
+- [ ] Crew availability indicator (Green/Yellow/Red)
