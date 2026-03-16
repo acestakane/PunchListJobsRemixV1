@@ -136,6 +136,14 @@ class SettingsUpdate(BaseModel):
     social_native_share_enabled: Optional[bool] = None
 
 
+# ─── Crew Request Models ─────────────────────────────────────────────────────
+
+class CrewRequest(BaseModel):
+    crew_id: str
+    message: Optional[str] = None
+    job_context: Optional[Dict] = None  # Optional job details to pre-fill
+
+
 # ─── Referral / Points ───────────────────────────────────────────────────────
 
 class RedeemPoints(BaseModel):

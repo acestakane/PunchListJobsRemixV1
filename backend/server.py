@@ -98,17 +98,66 @@ async def hide_old_completed_jobs():
         logger.error(f"Cron job error: {e}")
 
 
+async def expire_emergency_jobs():
+    """Cron job: expire emergency jobs not accepted within 30 min."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        result = await db.jobs.update_many(
+            {"is_emergency": True, "status": "open", "created_at": {"$lt": cutoff}},
+            {"$set": {"status": "expired", "is_hidden": True}}
+        )
+        if result.modified_count > 0:
+            logger.info(f"Cron: expired {result.modified_count} emergency jobs")
+    except Exception as e:
+        logger.error(f"Emergency expiry cron error: {e}")
+
+
+async def send_subscription_reminders():
+    """Cron job: notify users whose subscription expires in 3 days."""
+    try:
+        from utils.email_utils import send_subscription_email
+        now = datetime.now(timezone.utc)
+        reminder_window_start = (now + timedelta(days=2, hours=23)).isoformat()
+        reminder_window_end = (now + timedelta(days=3, hours=1)).isoformat()
+        expiring_users = await db.users.find({
+            "subscription_status": "active",
+            "subscription_end": {"$gte": reminder_window_start, "$lte": reminder_window_end},
+            "reminder_sent_3d": {"$ne": True}
+        }, {"_id": 0}).to_list(200)
+        for u in expiring_users:
+            try:
+                await send_subscription_email(
+                    u.get("email", ""),
+                    u.get("name", ""),
+                    u.get("subscription_plan", "monthly"),
+                    u.get("subscription_end", ""),
+                    is_reminder=True
+                )
+                await db.users.update_one({"id": u["id"]}, {"$set": {"reminder_sent_3d": True}})
+                logger.info(f"Subscription reminder sent to {u.get('email')}")
+            except Exception as e:
+                logger.warning(f"Failed to send reminder to {u.get('email')}: {e}")
+    except Exception as e:
+        logger.error(f"Subscription reminder cron error: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     # Create indexes
     try:
         await db.users.create_index("email", unique=True)
         await db.users.create_index("referral_code", sparse=True)
+        await db.users.create_index("is_online")
+        # 2dsphere index for geo queries on location_geo field
+        await db.users.create_index([("location_geo", "2dsphere")], sparse=True)
         await db.jobs.create_index("status")
         await db.jobs.create_index("contractor_id")
         await db.jobs.create_index("created_at")
+        await db.jobs.create_index([("location_geo", "2dsphere")], sparse=True)
         await db.jobs.create_index([("completed_at", 1), ("status", 1)])
-        logger.info("Database indexes created")
+        await db.crew_requests.create_index([("crew_id", 1), ("status", 1)])
+        await db.crew_requests.create_index([("contractor_id", 1)])
+        logger.info("Database indexes created (incl. 2dsphere)")
     except Exception as e:
         logger.warning(f"Index creation: {e}")
 
@@ -150,23 +199,40 @@ async def startup_event():
     existing_settings = await db.settings.find_one({})
     if not existing_settings:
         await db.settings.insert_one({
-            "daily_price": 4.99,
-            "weekly_price": 24.99,
-            "monthly_price": 79.99,
-            "annual_price": 699.99,
+            "daily_price": 1.99,
+            "weekly_price": 9.99,
+            "monthly_price": 29.99,
+            "annual_price": 179.94,
             "trial_days": 30,
-            "job_visibility_hours": 12
+            "annual_trial_days": 180,
+            "job_visibility_hours": 12,
+            "emergency_expiry_minutes": 30,
+            "cashapp_cashtag": os.environ.get("CASHAPP_CASHTAG", "cdiatlanta"),
+            "social_linkedin_enabled": True,
+            "social_twitter_enabled": True,
+            "social_facebook_enabled": True,
+            "social_native_share_enabled": True,
         })
         logger.info("Default settings created")
     else:
-        # Add annual_price if missing
+        updates = {}
         if not existing_settings.get("annual_price"):
-            await db.settings.update_one({}, {"$set": {"annual_price": 699.99}})
+            updates["annual_price"] = 179.94
+        if not existing_settings.get("cashapp_cashtag"):
+            updates["cashapp_cashtag"] = os.environ.get("CASHAPP_CASHTAG", "cdiatlanta")
+        if not existing_settings.get("emergency_expiry_minutes"):
+            updates["emergency_expiry_minutes"] = 30
+        if not existing_settings.get("annual_trial_days"):
+            updates["annual_trial_days"] = 180
+        if updates:
+            await db.settings.update_one({}, {"$set": updates})
 
     # Start cron scheduler
     scheduler.add_job(hide_old_completed_jobs, "interval", hours=1, id="hide_jobs_cron", replace_existing=True)
+    scheduler.add_job(expire_emergency_jobs, "interval", minutes=15, id="emergency_expiry_cron", replace_existing=True)
+    scheduler.add_job(send_subscription_reminders, "interval", hours=6, id="subscription_reminders", replace_existing=True)
     scheduler.start()
-    logger.info("Scheduler started: hide_jobs_cron every hour")
+    logger.info("Scheduler started: hide_jobs_cron every 1h, emergency_expiry every 15m, reminders every 6h")
 
     logger.info("TheDayLaborers API started successfully")
 

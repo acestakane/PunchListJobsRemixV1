@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from database import db
 from auth import get_current_user, user_to_response
-from models import ProfileUpdate, LocationUpdate, OnlineStatusUpdate
+from models import ProfileUpdate, LocationUpdate, OnlineStatusUpdate, CrewRequest
 from typing import Optional
 import logging
 
@@ -66,6 +66,11 @@ async def update_profile(data: ProfileUpdate, current_user: dict = Depends(get_c
                     "lat": geo["lat"], "lng": geo["lng"],
                     "city": geo.get("city", ""), "address": data.address
                 }
+                # Store GeoJSON format for 2dsphere index
+                update["location_geo"] = {
+                    "type": "Point",
+                    "coordinates": [geo["lng"], geo["lat"]]  # GeoJSON: [lng, lat]
+                }
         except Exception as e:
             logger.warning(f"Geocoding failed for address '{data.address}': {e}")
 
@@ -93,9 +98,11 @@ async def get_public_profile(user_id: str, current_user: dict = Depends(get_curr
 @router.post("/location")
 async def update_location(data: LocationUpdate, current_user: dict = Depends(get_current_user)):
     location = {"lat": data.lat, "lng": data.lng, "city": data.city or ""}
+    # Also save GeoJSON format for 2dsphere index
+    location_geo = {"type": "Point", "coordinates": [data.lng, data.lat]}
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"location": location}}
+        {"$set": {"location": location, "location_geo": location_geo}}
     )
     # Update WS location
     try:
@@ -155,14 +162,15 @@ async def search_crew(
     if available_only:
         query["$and"] = query.get("$and", []) + [{"$or": [{"availability": True}, {"is_online": True}]}]
 
-    # Only show crew with reasonably complete profiles (phone or trade set)
+    # Profile gate: only show crew with at least a phone or trade set (basic completion)
     query["$and"] = query.get("$and", []) + [
-        {"$or": [{"phone": {"$exists": True, "$ne": None}}, {"trade": {"$exists": True, "$ne": ""}}]}
+        {"$or": [
+            {"phone": {"$exists": True, "$nin": [None, ""]}},
+            {"trade": {"$exists": True, "$nin": [None, ""]}}
+        ]}
     ]
 
-    crew = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
-
-    # Geocode address search if provided and no lat/lng
+    # Geocode address if provided and no lat/lng
     if address and not (lat and lng):
         try:
             from utils.geocoding import geocode_address
@@ -171,19 +179,55 @@ async def search_crew(
         except Exception:
             pass
 
+    # Use MongoDB 2dsphere geo query if lat/lng available
     if lat and lng:
+        radius_meters = radius * 1609.34  # miles → meters
+        query["location_geo"] = {
+            "$geoWithin": {
+                "$centerSphere": [[lng, lat], radius / 3958.8]  # radius in radians (earth radius ~3958.8 mi)
+            }
+        }
+
+    crew = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
+
+    # Fallback: if no location_geo data but lat/lng given, use haversine
+    if lat and lng and not any(c.get("location_geo") for c in crew):
         from utils.geocoding import haversine_distance
         crew = [c for c in crew if c.get("location") and
                 haversine_distance(lat, lng, c["location"]["lat"], c["location"]["lng"]) <= radius]
 
-    # Mask exact location for privacy - round to 2 decimal places (~1km precision)
+    # Contact masking: hide phone/email unless viewing own profile or job is active
+    is_contractor = current_user["role"] == "contractor"
+    accepted_crew_ids = set()
+    if is_contractor:
+        # Find contractor's accepted/in-progress jobs crew IDs
+        active_jobs = await db.jobs.find(
+            {"contractor_id": current_user["id"], "status": {"$in": ["fulfilled", "in_progress"]}},
+            {"_id": 0, "crew_accepted": 1}
+        ).to_list(50)
+        for j in active_jobs:
+            accepted_crew_ids.update(j.get("crew_accepted", []))
+
     for c in crew:
-        if c.get("location") and c.get("hide_location"):
+        if c["id"] not in accepted_crew_ids and c["id"] != current_user["id"]:
+            # Mask phone: show only last 4 digits
+            phone = c.get("phone")
+            if phone:
+                digits = ''.join(filter(str.isdigit, phone))
+                c["phone"] = f"***-***-{digits[-4:]}" if len(digits) >= 4 else "***"
+            # Always hide email
+            c.pop("email", None)
+
+        # Location masking for privacy (~1km precision)
+        if c.get("location") and c.get("hide_location", True):
             c["location"] = {
                 "lat": round(c["location"]["lat"], 2),
                 "lng": round(c["location"]["lng"], 2),
                 "city": c["location"].get("city", "")
             }
+        # Remove GeoJSON internal field
+        c.pop("location_geo", None)
+        c.pop("password_hash", None)
 
     return crew
 
@@ -282,3 +326,118 @@ async def trial_status(current_user: dict = Depends(get_current_user)):
         }
     except Exception:
         return {"is_trial": False, "days_remaining": 0}
+
+
+# ─── Crew Request System ──────────────────────────────────────────────────────
+
+@router.post("/request/{crew_id}")
+async def send_crew_request(crew_id: str, data: CrewRequest, current_user: dict = Depends(get_current_user)):
+    """Contractor sends a direct request to a crew member."""
+    if current_user["role"] != "contractor":
+        raise HTTPException(status_code=403, detail="Only contractors can send crew requests")
+
+    crew_member = await db.users.find_one({"id": crew_id, "role": "crew"}, {"_id": 0})
+    if not crew_member:
+        raise HTTPException(status_code=404, detail="Crew member not found")
+
+    from datetime import datetime, timezone
+    request_doc = {
+        "id": str(uuid.uuid4()),
+        "contractor_id": current_user["id"],
+        "contractor_name": current_user["name"],
+        "contractor_company": current_user.get("company_name", ""),
+        "crew_id": crew_id,
+        "crew_name": crew_member["name"],
+        "message": data.message or "",
+        "job_context": data.job_context,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.crew_requests.insert_one(request_doc)
+
+    # Notify crew via WebSocket
+    try:
+        from routes.ws_routes import manager
+        await manager.send_to_user(crew_id, {
+            "type": "crew_request",
+            "request_id": request_doc["id"],
+            "contractor_name": current_user["name"],
+            "contractor_company": current_user.get("company_name", ""),
+            "message": data.message or "",
+            "job_context": data.job_context,
+        })
+    except Exception:
+        pass
+
+    return {k: v for k, v in request_doc.items() if k != "_id"}
+
+
+@router.get("/requests")
+async def get_crew_requests(current_user: dict = Depends(get_current_user)):
+    """Get pending crew requests for crew member, or sent requests for contractor."""
+    if current_user["role"] == "crew":
+        requests = await db.crew_requests.find(
+            {"crew_id": current_user["id"]},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+    else:
+        requests = await db.crew_requests.find(
+            {"contractor_id": current_user["id"]},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+    return requests
+
+
+@router.put("/requests/{request_id}/accept")
+async def accept_crew_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Crew member accepts a contractor request."""
+    if current_user["role"] != "crew":
+        raise HTTPException(status_code=403, detail="Only crew can accept requests")
+
+    req = await db.crew_requests.find_one({"id": request_id, "crew_id": current_user["id"]}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Request already {req['status']}")
+
+    await db.crew_requests.update_one({"id": request_id}, {"$set": {"status": "accepted"}})
+
+    # Notify contractor via WebSocket
+    try:
+        from routes.ws_routes import manager
+        await manager.send_to_user(req["contractor_id"], {
+            "type": "crew_request_accepted",
+            "request_id": request_id,
+            "crew_name": current_user["name"],
+            "crew_id": current_user["id"],
+        })
+    except Exception:
+        pass
+
+    return {"message": "Request accepted"}
+
+
+@router.put("/requests/{request_id}/decline")
+async def decline_crew_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Crew member declines a contractor request."""
+    if current_user["role"] != "crew":
+        raise HTTPException(status_code=403, detail="Only crew can decline requests")
+
+    req = await db.crew_requests.find_one({"id": request_id, "crew_id": current_user["id"]}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    await db.crew_requests.update_one({"id": request_id}, {"$set": {"status": "declined"}})
+
+    # Notify contractor via WebSocket
+    try:
+        from routes.ws_routes import manager
+        await manager.send_to_user(req["contractor_id"], {
+            "type": "crew_request_declined",
+            "request_id": request_id,
+            "crew_name": current_user["name"],
+        })
+    except Exception:
+        pass
+
+    return {"message": "Request declined"}

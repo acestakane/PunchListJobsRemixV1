@@ -23,13 +23,14 @@ PAYPAL_MODE = os.environ.get("PAYPAL_MODE", "sandbox")
 PAYPAL_BASE_URL = "https://api-m.sandbox.paypal.com" if PAYPAL_MODE == "sandbox" else "https://api-m.paypal.com"
 SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN", "")
 SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID", "")
+CASHAPP_CASHTAG = os.environ.get("CASHAPP_CASHTAG", "cdiatlanta")
 
 # Subscription plans (prices defined server-side for security)
 PLANS = {
-    "daily": {"amount": 4.99, "days": 1, "label": "Daily Pass"},
-    "weekly": {"amount": 24.99, "days": 7, "label": "Weekly Pass"},
-    "monthly": {"amount": 79.99, "days": 30, "label": "Monthly Pass"},
-    "annual": {"amount": 699.99, "days": 365, "label": "Annual Pass"},
+    "daily":   {"amount": 1.99,   "days": 1,   "label": "Daily Pass",   "trial_days": 0},
+    "weekly":  {"amount": 9.99,   "days": 7,   "label": "Weekly Pass",  "trial_days": 0},
+    "monthly": {"amount": 29.99,  "days": 30,  "label": "Monthly Pass", "trial_days": 30},
+    "annual":  {"amount": 179.94, "days": 365, "label": "Annual Pass",  "trial_days": 180},
 }
 
 
@@ -74,6 +75,7 @@ async def get_plans():
         PLANS["daily"]["amount"] = settings.get("daily_price", PLANS["daily"]["amount"])
         PLANS["weekly"]["amount"] = settings.get("weekly_price", PLANS["weekly"]["amount"])
         PLANS["monthly"]["amount"] = settings.get("monthly_price", PLANS["monthly"]["amount"])
+        PLANS["annual"]["amount"] = settings.get("annual_price", PLANS["annual"]["amount"])
     return PLANS
 
 
@@ -397,3 +399,62 @@ async def square_payment_status(order_id: str, plan: str, user_id: str, current_
     except Exception as e:
         logger.error(f"Square status check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── CashApp Cashtag Payment Link ─────────────────────────────────────────────
+
+@router.post("/cashapp/generate-link")
+async def cashapp_generate_link(data: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+    """Generate a CashApp direct payment link using the $cashtag."""
+    if data.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    plan_info = PLANS[data.plan]
+    # Fetch cashtag from settings (admin-configurable)
+    settings = await db.settings.find_one({}, {"_id": 0})
+    cashtag = (settings or {}).get("cashapp_cashtag") or CASHAPP_CASHTAG or "cdiatlanta"
+
+    amount = plan_info["amount"]
+    note = f"TheDayLaborers {plan_info['label']} - {current_user['email']}"
+    # CashApp pay link format: https://cash.app/$cashtag/amount
+    cashapp_url = f"https://cash.app/${cashtag}/{amount}"
+
+    # Store pending transaction
+    tx = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "amount": float(amount),
+        "currency": "usd",
+        "plan": data.plan,
+        "payment_method": "cashapp_manual",
+        "payment_status": "pending",
+        "cashtag": cashtag,
+        "created_at": now_str(),
+    }
+    await db.payment_transactions.insert_one(tx)
+
+    return {
+        "url": cashapp_url,
+        "cashtag": f"${cashtag}",
+        "amount": amount,
+        "plan": plan_info["label"],
+        "note": note,
+        "tx_id": tx["id"],
+        "instructions": f"Send ${amount} to ${cashtag} on CashApp with note: '{note}'"
+    }
+
+
+@router.post("/cashapp/confirm/{tx_id}")
+async def cashapp_confirm_payment(tx_id: str, current_user: dict = Depends(get_current_user)):
+    """User confirms they sent the CashApp payment (admin must verify manually)."""
+    tx = await db.payment_transactions.find_one({"id": tx_id, "user_id": current_user["id"]}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.get("payment_status") == "paid":
+        return {"message": "Already confirmed"}
+
+    await db.payment_transactions.update_one(
+        {"id": tx_id},
+        {"$set": {"payment_status": "pending_verification", "user_confirmed_at": now_str()}}
+    )
+    return {"message": "Payment confirmation submitted. Admin will verify and activate your subscription."}

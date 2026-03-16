@@ -1,211 +1,211 @@
 <analysis>**original_problem_statement:**
-The initial request was to build a scalable on-demand workforce marketplace app called TheDayLaborers, similar to catchoutcrew.com. The platform connects Crew Members (workers), Contractors (businesses), and Administrators.
+The initial request was to build a TheDayLaborers workforce marketplace. This was followed by two major upgrade requests.
 
-A new set of requirements was provided to upgrade and debug the existing platform.
-
-**PRODUCT REQUIREMENTS (New Features/Upgrades):**
-- **Authentication:** Add subscription gating (Daily/Weekly/Monthly/Annual plans) with free trials. Prevent actions if the subscription has expired.
-- **Profile System:** Enforce profile completion (Photo, Phone, Address, Skills, Bio) with a UI checklist before users appear on the map. Add manual address entry with geocoding.
-- **Location Features:** Implement an Enable Location toggle for live location updates via browser GPS. Mask exact addresses. Add a Center My Location button.
-- **Map Features:** Add a visibility toggle for crew members (Online/Offline).
-- **Contractor Dashboard:** Fix crew search by Name, Location, and Trade. Add a crew member card with View Profile, Share Profile, and Request Crew buttons.
-- **Job Duplication:** Allow contractors to duplicate existing jobs.
-- **Job Workflow:** Implement a detailed status flow: Posted -> Accepted -> In Progress -> Completed -> Verified.
-- **Emergency Crew Request:** Create a special job type with a broadcast alert to nearby crew, with a first-to-accept race lock mechanism.
-- **Communication:** Add in-app calling with masked numbers.
-- **Payments:** Add CashApp payment support.
-- **Notifications:** Implement system notifications (in-app and email via Resend) for key job events.
-- **Admin Panel:** Add analytics for crew utilization, contractor spending, and job completion rates.
-- **Security:** Prevent contact info scraping and add rate limiting.
-- **Mobile API:** Prepare the API layer for future mobile clients.
-- **Cron Job:** Create a scheduled job to hide completed jobs after 12 hours.
-- **High-Impact Recommendations:** Add crew availability indicators, a contractor spending dashboard, a crew reputation score, and AI-powered job matching.
+**LATEST PRODUCT REQUIREMENTS (from user message #242):**
+- **Profile System:** Enforce a profile completion checklist (Photo, Phone, Address, Skills, Bio) before a user appears on the map. Add a progress tracker and a 3-step onboarding UI.
+- **Map & Location:**
+    - Add a map visibility toggle (Enable Location / LIVE ON MAP).
+    - Allow both manual address entry (with geocoding) and live GPS tracking ().
+    - Mask exact addresses on the map, showing only Street Name and City.
+    - Send live location updates to the server via WebSockets for broadcasting.
+- **Contractor Dashboard:**
+    - Add sidebar crew search by Name, Trade, and Location.
+    - Display crew cards with photo, rating, distance, skills, and buttons for VIEW PROFILE, REQUEST CREW, SHARE PROFILE.
+- **Job & Crew Request System:**
+    - Implement a  request flow with Accept/Decline options and WebSocket events.
+    - Implement an Emergency Job Alert broadcast to nearby crew using geo-filtering, with a first-to-accept atomic database lock.
+- **Job Workflow:** Formalize status flow: .
+- **Payments:**
+    - Update subscription plans: Daily .99, Weekly .99, Monthly 9.99, Annual (50% discount).
+    - Add 30-day (monthly) and 6-month (annual) free trials.
+    - Integrate CashApp by generating a payment link to the user's provided .
+- **Admin & Cron Jobs:**
+    - Admin dashboard analytics for total users, jobs (posted/completed), contractor spending, crew reliability.
+    - Admin ability to suspend users, edit subscriptions, and view payments.
+    - Cron jobs to hide completed jobs (after 12 hours), expire emergency alerts, and send subscription reminders.
+- **Technical Fixes:**
+    - Optimize geo-search by creating a  index on the  field in MongoDB.
+    - Ensure contact information (email/phone) is masked until a job is accepted.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The agent has completed the initial MVP of the TheDayLaborers application. This includes:
-- A FastAPI backend and a React frontend.
-- JWT-based authentication for three user roles: Crew, Contractor, and Admin.
-- Basic dashboards for each user role.
-- A landing page.
-- Initial setup for profiles, job posting, a live map (OpenStreetMap), job acceptance, ratings, subscriptions, and a referral system.
-- WebSocket integration for real-time updates.
-- The project has passed an initial round of testing by the testing agent, and the reported issues were addressed.
+An MVP of the TheDayLaborers application (FastAPI backend, React frontend) has been built and significantly enhanced.
+- The agent completed a large set of P0/P1 features, including subscription gating, emergency jobs, job duplication, improved search, admin analytics, and Square payment integration. These changes were successfully validated by the testing agent (40/40 backend, 12/12 frontend passed).
+- The agent then implemented another user request for profile address editing, social sharing, a crew profile popup modal, and a detailed App Settings page.
+- The agent has now started implementing a *new*, highly detailed set of requirements (see above). Backend work has commenced, including adding  indexes, updating pricing models, and creating new endpoints and cron jobs.
 
 **Last working item**:
--   **Last item agent was working:** The agent started implementing the large set of new features and upgrades from the new problem statement. It began by modifying the backend files (, , , , ) to incorporate the new logic for subscription gating, profile enhancements, emergency jobs, and more. The agent executed a parallel  operation to apply these changes.
+-   **Last item agent was working:** The agent was in the middle of a major backend implementation based on the latest user requirements. It had just fixed an issue where the  endpoint was returning stale subscription prices from the database instead of the newly configured ones. After correcting this, the agent created a placeholder for the  component, preparing to start the extensive frontend updates.
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
--   **Which testing method agent to use?** both. The changes are extensive and will affect both the frontend and backend. A full end-to-end test will be required after the implementation is complete.
+-   **Agent Testing Done:** N (for the current set of changes)
+-   **Which testing method agent to use?** both. The changes are extensive and require full end-to-end testing.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0): Backend logic mismatch with problem statement.**
-    -   **Description:** The original and updated problem statements explicitly request a **Node.js/Express** backend. However, the agent implemented the backend using **Python/FastAPI**. The agent continued to build upon the Python backend even after receiving the updated requirements specifying Node.js again. This is a critical deviation from the user's request.
-    -   **Attempted fixes:** None. The agent has not acknowledged this discrepancy.
-    -   **Next debug checklist:** The next agent MUST clarify this with the user. Ask the user if they want to continue with the current Python/FastAPI stack or if the project needs to be migrated to Node.js/Express as originally requested.
-    -   **Why fix this issue and what will be achieved with the fix?** To align the project's technology stack with the user's explicit requirements and avoid building on a foundation the user did not ask for.
-    -   **Status:** NOT STARTED
-    -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** both (if a migration is performed).
-    -   **Blocked on other issue:** User decision required.
-
--   **Issue 2 (P1): Fix crew search functionality.**
-    -   **Description:** The new problem statement explicitly mentions the need to Fix crew search functionality on the contractor dashboard.
-    -   **Attempted fixes:** The agent has started modifying backend files, which may include parts of the search logic, but it's not confirmed if the fix is complete.
+-   **Issue 1 (P0): Complete implementation of latest requirements.**
+    -   **Description:** The user provided a comprehensive new PRD (message #242). The backend work is partially complete, but the corresponding frontend implementation has not started. The application is in a transient state where the frontend is out of sync with the backend.
+    -   **Attempted fixes:** The agent has started the backend implementation.
     -   **Next debug checklist:**
-        - Review  to check the search endpoint logic.
-        - Review  to check how the search is implemented on the frontend.
-        - Ensure the API is being called correctly with search parameters (Name, Location, Trade skills).
-    -   **Why fix this issue and what will be achieved with the fix?** This is a core feature for contractors to find workers. Fixing it is essential for the platform's usability.
+        1.  Complete the remaining backend tasks: full implementation of crew request flow, contact masking logic in user routes, and job request system.
+        2.  Implement all new frontend features, starting with .
+        3.  Update existing frontend components (, , , ) to align with the new backend logic and UI requirements.
+        4.  Integrate  for live location tracking.
+    -   **Why fix this issue and what will be achieved with the fix?** To deliver the full set of features requested by the user and bring the application to a stable, functional state.
     -   **Status:** IN PROGRESS
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   **Task 1 (P0): Implement Backend Upgrades**
-    -   **Where to resume:** The agent just ran a large  command on multiple backend files. The next step is to verify the successful application of these changes by viewing the modified files. Then, continue with the remaining backend tasks (e.g., cron job, WebSocket events) before moving to the frontend.
-    -   **What will be achieved with this?** This will lay the foundation for all the new features requested, such as subscription gating, emergency jobs, profile completion logic, and more.
+-   **Task 1 (P0): Backend Implementation for New Requirements.**
+    -   **Where to resume:** The backend  has been updated with  indexes and new cron jobs. The  and  have been partially updated. The immediate next step is to complete the implementation of the new endpoints in , particularly the crew request flow and ensuring the  field is correctly populated for geo-queries.
+    -   **What will be achieved with this?** A backend that fully supports profile gating, optimized geo-search, crew requests, updated payment plans, and new cron jobs.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** backend
-    -   **Blocked on something:** Blocked on clarification of the Node.js vs Python backend issue (see Issue 1).
+    -   **Blocked on something:** None.
+
+-   **Task 2 (P0): Frontend Implementation for New Requirements.**
+    -   **Where to resume:** Start by building out the  file that was just created. This modal should contain the 3-step profile completion flow.
+    -   **What will be achieved with this?** A modern, intuitive UI that aligns with all the new backend functionality, providing a complete user experience as requested.
+    -   **Status:** NOT STARTED
+    -   **Should Test frontend/backend/both after fix?** frontend
+    -   **Blocked on something:** Backend Implementation (Task 1).
 
 **Upcoming and Future Tasks**
-**Upcoming Tasks (P1):**
--   **Frontend Implementation:**
-    -   **Subscription Gating:** Implement UI to block job posting/acceptance if the subscription is inactive.
-    -   **Profile Completion:** Create the UI checklist for profile completion.
-    -   **Location Features:** Add the Enable Location toggle and Center My Location button.
-    -   **Contractor Dashboard:** Implement the crew card with View/Share/Request buttons.
-    -   **Job Duplication:** Add a Duplicate button and form to the job management UI.
-    -   **Emergency Job:** Create the SEND EMERGENCY ALERT form and UI.
-    -   **In-app Calling:** Add Call buttons to profiles.
--   **Integrations:**
-    -   Add **CashApp** payment integration.
--   **Critical Feature:**
-    -   Implement the **atomic database lock** for the emergency job acceptance race.
+- **Upcoming Tasks (P1):**
+    - **In-App Calling:** Implement masked calling. The user confirmed they do not have a Twilio account, so the agent needs to propose an alternative solution (e.g., a different provider, or a web-based calling feature).
+    - **Admin Dashboard Features:** Add UI for suspending users, editing subscriptions, and viewing payment history.
 
-**Future Tasks (P2):**
--   Build dedicated mobile apps (iOS/Android) using React Native or Flutter.
--   Implement recommended high-impact features:
-    -   Crew availability indicator (Green/Yellow/Red).
-    -   Contractor spending dashboard with charts.
-    -   Crew reputation score.
-    -   Smart AI job matching using GPT for scoring.
+- **Future Tasks (P2):**
+    - Build dedicated mobile apps (iOS/Android).
+    - Implement high-impact features: crew reputation score, AI-powered job matching.
 
 **Completed work in this session**
--   **Initial MVP built from scratch**, including:
-    -   User authentication (JWT) with three roles (Crew, Contractor, Admin).
-    -   Backend structure using Python/FastAPI.
-    -   Frontend structure using React and TailwindCSS.
-    -   Separate dashboards for each role.
-    -   Landing Page and basic auth pages.
-    -   Core models for , , , .
-    -   Initial implementation of the Live Job Map, job workflow, ratings, and subscriptions.
-    -   PayPal and Stripe payment integration (sandbox/test mode).
-    -   Resend API integration for emails.
-    -   PWA configuration files (, ).
-    -   The initial build passed a full test suite from the testing agent.
+- **Technology Stack Confirmation:** Resolved the critical Node.js vs. Python discrepancy by confirming with the user to continue with the existing Python/FastAPI stack.
+- **P0/P1 Feature Implementation (First Batch):**
+    - Implemented backend logic and frontend UI for subscription gating, emergency job atomic locks, job duplication, improved crew search, and admin analytics.
+    - Integrated Square for payments.
+    - Ran a full test suite using the testing agent, which passed successfully, and fixed all reported minor issues.
+- **P2 Feature Implementation (Second Batch):**
+    - Added functionality for users to add/modify their address, share their profiles, and manage detailed app settings (notifications, sound, etc.).
+    - Implemented a crew profile popup modal on the Contractor Dashboard.
+- **Backend Overhaul (Third Batch - In Progress):**
+    - Added  index to MongoDB for efficient geo-queries.
+    - Added new cron jobs for subscription reminders and emergency alert expiry.
+    - Updated pricing models and  in the environment.
+    - Started creating new routes for crew requests and live location updates.
 
 **Earlier issues found/mentioned but not fixed**
-None. The issues identified by the testing agent in the first phase (pie chart rendering, URL trailing slashes) were addressed by the agent before finishing. The current pending work comes from the new problem statement.
+-   **Issue 1: In-App Calling Blocked**
+    -   **Debug checklist:** The user stated they do not have a Twilio account. The next agent should research and propose an alternative provider for masked calling or a different implementation approach and confirm with the user.
+    -   **Why to solve this issue and what will be achieved with this?** This is a required feature for secure communication between users.
+    -   **Should Test frontend/backend/both after fix:** both
+    -   **Is recurring issue?** Y
 
 **Known issue recurrence from previous fork**
-None. This is the first handoff.
+-   **Issue:** Backend technology stack mismatch (Python/FastAPI vs. user-requested Node.js/Express).
+-   **Recurrence count:** 1
+-   **Status:** RESOLVED. The agent sought clarification and received user approval to continue with Python/FastAPI.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Backend:** Python, FastAPI
--   **Frontend:** React, TailwindCSS
--   **Database:** MongoDB
+-   **Backend:** Python, FastAPI, APScheduler (for cron jobs)
+-   **Frontend:** React, TailwindCSS, Socket.IO Client
+-   **Database:** MongoDB (with  for geospatial queries)
 -   **Real-time:** WebSockets
 -   **Authentication:** JWT
 -   **Maps:** Leaflet.js, OpenStreetMap
--   **Payments:** Stripe, PayPal
--   **AI:** OpenAI
+-   **Payments:** Stripe, PayPal, Square, CashApp
+-   **AI:** OpenAI (planned)
 
 **key DB schema**
--   **users:** {name, email, password, role, profile_photo, phone, address, trade_skills, bio, location, subscription_status, etc.}
--   **jobs:** {title, description, trade, crew_needed, start_time, pay_rate, location, status, contractor_id, etc.}
--   **subscriptions:** {user_id, plan_type, start_date, end_date, status}
--   **ratings:** {job_id, rater_id, rated_id, stars, review}
+-   **users:** {..., address, : { type: Point, coordinates: [lng, lat] }, : boolean, : number, ...}
+-   **jobs:** {..., : boolean, : string, ...}
+-   **crew_requests:** { contractor_id, crew_id, job_details, status, timestamp }
+-   **settings:** {..., : {linkedin, x, facebook}, : float, ...}
+-   **subscriptions:** {user_id, plan_type, start_date, end_date, status, trial_ends}
 
 **changes in tech stack**
--   **Major Deviation:** The user requested a **Node.js/Express** backend in both the initial and updated problem statements. The agent implemented the backend using **Python/FastAPI** instead and has not acknowledged this discrepancy.
+-   The major deviation of using Python/FastAPI instead of Node.js/Express was reviewed and approved by the user. No other changes to the core stack.
 
 **All files of reference**
--   : Main FastAPI app.
--   : Pydantic models for the database schema.
--   , , : API endpoints.
--   : Main React component with routing.
--   , , : Main dashboard components.
--   : The public-facing homepage.
--   : Project requirements document.
--   : Test report from the initial MVP build.
+-   : Main app, cron jobs, DB indexing.
+-   : Profile completion, geo-search, crew requests.
+-   : Emergency job logic, job duplication.
+-   : Square and CashApp integration.
+-   : Analytics and settings endpoints.
+-   : Needs overhaul for search and crew cards.
+-   : Needs map visibility toggle.
+-   : Needs address and profile completion UI.
+-   : Needs updates for new pricing/CashApp.
+-   : New component to be built.
+-   : Contains all requirements, needs to be kept updated.
 
 **Areas that need refactoring**:
-The entire backend could be considered for a rewrite in Node.js/Express to match the user's explicit request. A decision on this is the highest priority.
+-  and  are large components that will be significantly modified. They may benefit from being broken down into smaller, more manageable child components.
 
 **key api endpoints**
--   , 
--   , 
--   , 
--   
--   WebSocket endpoint at 
+-   **POST** : For  live updates.
+-   **GET** : Updated with  geo-search.
+-   **POST** : To initiate a crew request.
+-   **GET** : To retrieve the CashApp payment link.
+-   **GET** : To fetch public settings like social media links.
+-   **GET** : Updated to show new pricing including the annual plan.
+-   **WebSockets:** , , .
 
 **Critical Info for New Agent**
--   **Technology Stack Mismatch:** The most critical issue is that the user requested a **Node.js/Express** backend twice, but the existing implementation is **Python/FastAPI**. You MUST clarify with the user whether to continue with Python or migrate to Node.js before proceeding with the new features. Do not continue building on the current stack without user confirmation.
--   **In-Progress Major Upgrade:** You are in the middle of a large feature implementation. The agent has just applied backend changes via . These changes are not tested or verified.
--   **New Requirements:** A comprehensive list of new features, bug fixes, and improvements has been provided (Message 63). This is your primary source of tasks.
--   **Credentials:** PayPal sandbox credentials are available in the message history. Stripe is using test keys.
+-   You are in the middle of a large, multi-part feature implementation based on the user's detailed problem statement in message #242. This is your primary source of truth.
+-   The backend work has started, but the frontend has not been updated yet. The application is likely in a non-functional state until the frontend changes are made.
+-   The user has approved the Python/FastAPI stack. Do not suggest changing it.
+-   The user does not have a Twilio account for masked calling. You need to propose an alternative.
+-   All necessary credentials for payments (PayPal, Square, CashApp) have been provided by the user and are in the history.
 
 **documents and test reports created in this job**
+-    (Updated)
 -   
--   
+-    (Started, but interrupted)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Msg 63):** Provided a very detailed new problem statement outlining numerous upgrades, bug fixes, and new features for the platform. This is the new source of truth for all upcoming work. (IN PROGRESS)
-2.  **Agent (Msg 62):** Finished the initial MVP build and provided a summary. (Completed)
-3.  **User (Msg 50):** Acknowledged the testing agent's results. (Completed)
-4.  **Agent (Msg 47):** Stated the landing page looks good and initiated the testing agent. (Completed)
-5.  **Agent (Msg 45):** Confirmed the API is working and took a screenshot. (Completed)
-6.  **Agent (Msg 41):** Confirmed the backend is running and prepared to test the API. (Completed)
-7.  **Agent (Msg 35):** Updated Tailwind config and restarted services. (Completed)
-8.  **User (Msg 8):** Confirmed using OpenAI for AI features and provided PayPal sandbox credentials. (Completed)
-9.  **User (Msg 5):** Provided choices for payment (all three), maps (OpenStreetMap), storage (local), and AI features (yes). (Completed)
-10. **Agent (Msg 4):** Asked clarifying questions about payment, maps, storage, and AI features. (Completed)
+1.  **User (Msg 304):** Confirmed prices are correct and instructed to proceed with frontend changes, starting with the . (IN PROGRESS)
+2.  **User (Msg 294):** Noticed that the subscription prices were incorrect. (RESOLVED)
+3.  **User (Msg 247):** Provided the CashApp tag: . (IMPLEMENTED)
+4.  **User (Msg 242):** Provided a new, extremely detailed problem statement that serves as the current PRD. This is the primary task list. (IN PROGRESS)
+5.  **User (Msg 235):** Unpaused the testing agent. (COMPLETED)
+6.  **User (Msg 136):** Requested a new set of features including address modification, social sharing, a crew profile popup, and a detailed App Settings page. (COMPLETED)
+7.  **User (Msg 132):** Confirmed P0+P1 features were working and instructed the agent to update the PRD and finish. (INTERRUPTED by new request)
+8.  **User (Msg 13):** Provided critical choices: stick with Python/FastAPI, provided CashApp/Square credentials, confirmed no Twilio account, and prioritized P0 items. (COMPLETED)
+9.  **User (Msg 2):** Instructed agent to present its plan. (COMPLETED)
 
 **Project Health Check:**
--   **Broken:**
-    -   Crew search functionality is reported as needing a fix.
-    -   The entire application is in a transient state due to the in-progress major upgrade.
--   **Mocked:**
-    -   PayPal payments are using sandbox credentials.
-    -   Stripe payments are in test mode.
+-   **Broken:** The application is in a transient state. Backend logic has been updated for the latest requirements, but the frontend is out of sync, making many features non-functional or misaligned.
+-   **Mocked:** All payment integrations (PayPal, Stripe, Square, CashApp) are configured for test/sandbox environments.
 
 **3rd Party Integrations**
--   **OpenAI GPT-4o:** For smart job matching and fraud detection (planned).
+-   **OpenAI GPT-4o:** Planned for AI features.
 -   **Stripe (Payments):** Integrated in test mode.
 -   **PayPal (Payments):** Integrated with sandbox credentials.
+-   **Square (Payments):** Integrated with production keys provided by user.
+-   **CashApp (Payments):** Integrated via payment link using user's .
 -   **OpenStreetMap (Maps):** Used via Leaflet.js.
 -   **Resend (Email):** Integrated for notifications.
--   **Square (Payments):** Requested but not yet implemented.
--   **CashApp (Payments):** Requested but not yet implemented.
 
 **Testing status**
--   **Testing agent used after significant changes:** YES (on the initial MVP).
+-   **Testing agent used after significant changes:** YES, on the previous two batches of features.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** None.
--   **Known regressions:** Crew search is reported as broken in the new requirements.
+-   **Known regressions:** None from previous tests, but the app is currently broken due to being mid-implementation.
 
 **Credentials to test flow:**
 -   **PayPal Sandbox:**
     -   Client ID: 
     -   Secret: 
+-   **Square/CashApp:**
+    -   Production App ID: 
+    -   Production Access Token: 
+    -   CashApp Tag: 
 
 **What agent forgot to execute**
--   The agent completely ignored the user's explicit requirement to use **Node.js/Express** for the backend, not once, but twice. It proceeded to build the entire application with Python/FastAPI without any justification or clarification.</analysis>
+- The agent has not yet proposed a solution for the In-App Calling feature, which is blocked because the user does not have a Twilio account. This needs to be addressed to complete all user requirements.</analysis>

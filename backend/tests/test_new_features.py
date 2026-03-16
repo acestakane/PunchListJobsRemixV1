@@ -628,7 +628,7 @@ class TestSquarePayment:
             json={
                 "plan": "monthly",
                 "payment_method": "square",
-                "origin_url": "https://job-marketplace-61.preview.emergentagent.com"
+                "origin_url": "https://job-crew-flow.preview.emergentagent.com"
             },
             headers={"Authorization": f"Bearer {crew_token}"}
         )
@@ -652,7 +652,7 @@ class TestSquarePayment:
             json={
                 "plan": "invalid_plan",
                 "payment_method": "square",
-                "origin_url": "https://job-marketplace-61.preview.emergentagent.com"
+                "origin_url": "https://job-crew-flow.preview.emergentagent.com"
             },
             headers={"Authorization": f"Bearer {crew_token}"}
         )
@@ -675,7 +675,7 @@ class TestSquarePayment:
             json={
                 "plan": "annual",
                 "payment_method": "square",
-                "origin_url": "https://job-marketplace-61.preview.emergentagent.com"
+                "origin_url": "https://job-crew-flow.preview.emergentagent.com"
             },
             headers={"Authorization": f"Bearer {crew_token}"}
         )
