@@ -91,9 +91,10 @@ async def stripe_create_session(data: CheckoutRequest, current_user: dict = Depe
     settings = await db.settings.find_one({}, {"_id": 0})
     if settings:
         plan_info = {
-            "daily": {"amount": settings.get("daily_price", 4.99), "days": 1, "label": "Daily Pass"},
-            "weekly": {"amount": settings.get("weekly_price", 24.99), "days": 7, "label": "Weekly Pass"},
-            "monthly": {"amount": settings.get("monthly_price", 79.99), "days": 30, "label": "Monthly Pass"},
+            "daily": {"amount": settings.get("daily_price", 1.99), "days": 1, "label": "Daily Pass"},
+            "weekly": {"amount": settings.get("weekly_price", 9.99), "days": 7, "label": "Weekly Pass"},
+            "monthly": {"amount": settings.get("monthly_price", 29.99), "days": 30, "label": "Monthly Pass"},
+            "annual": {"amount": settings.get("annual_price", 179.94), "days": 365, "label": "Annual Pass"},
         }.get(data.plan, plan_info)
 
     origin = data.origin_url.rstrip("/")
@@ -179,9 +180,10 @@ async def paypal_create_order(data: CheckoutRequest, current_user: dict = Depend
     settings = await db.settings.find_one({}, {"_id": 0})
     if settings:
         plan_info = {
-            "daily": {"amount": settings.get("daily_price", 4.99), "days": 1},
-            "weekly": {"amount": settings.get("weekly_price", 24.99), "days": 7},
-            "monthly": {"amount": settings.get("monthly_price", 79.99), "days": 30},
+            "daily": {"amount": settings.get("daily_price", 1.99), "days": 1},
+            "weekly": {"amount": settings.get("weekly_price", 9.99), "days": 7},
+            "monthly": {"amount": settings.get("monthly_price", 29.99), "days": 30},
+            "annual": {"amount": settings.get("annual_price", 179.94), "days": 365},
         }.get(data.plan, plan_info)
 
     access_token = await get_paypal_token()

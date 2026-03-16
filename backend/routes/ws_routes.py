@@ -106,7 +106,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         manager.update_user_location(user_id, lat, lng)
                         await db.users.update_one(
                             {"id": user_id},
-                            {"$set": {"location": {"lat": lat, "lng": lng, "city": msg.get("city", "")}}}
+                            {"$set": {
+                                "location": {"lat": lat, "lng": lng, "city": msg.get("city", "")},
+                                "location_geo": {"type": "Point", "coordinates": [lng, lat]}
+                            }}
                         )
                 elif msg_type == "ping":
                     await websocket.send_text(json.dumps({"type": "pong"}))

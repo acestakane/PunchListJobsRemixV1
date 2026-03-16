@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import Navbar from "../components/Navbar";
 import { toast } from "sonner";
 import axios from "axios";
-import { CheckCircle, Clock, Zap, Calendar, CreditCard, Shield, Star } from "lucide-react";
+import { CheckCircle, Clock, Zap, Calendar, CreditCard, Shield, Star, DollarSign } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -12,6 +12,10 @@ const PAYPAL_CLIENT_ID = "Ab9_cJrFPsrzDH5LL6A_H15k4I4oiPA1eOaKHzOI-hcwLrwyvL4sAr
 
 const PLAN_ICONS = { daily: Clock, weekly: Calendar, monthly: Zap, annual: Star };
 const PLAN_COLORS = { daily: "#10B981", weekly: "#0000FF", monthly: "#7C3AED", annual: "#F59E0B" };
+const TRIAL_INFO = {
+  monthly: { days: 30, label: "30-day free trial" },
+  annual: { days: 180, label: "6-month free trial" },
+};
 
 export default function SubscriptionPage() {
   const [searchParams] = useSearchParams();
@@ -22,6 +26,7 @@ export default function SubscriptionPage() {
   const [method, setMethod] = useState("square");
   const [subStatus, setSubStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [cashappInfo, setCashappInfo] = useState(null);
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");

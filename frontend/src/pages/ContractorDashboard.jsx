@@ -228,6 +228,9 @@ export default function ContractorDashboard() {
   const [loading, setLoading] = useState(true);
   const [subStatus, setSubStatus] = useState(null);
   const [viewingCrewId, setViewingCrewId] = useState(null);
+  const [requestingCrew, setRequestingCrew] = useState(null);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [crewRequests, setCrewRequests] = useState([]);
   const [jobForm, setJobForm] = useState({
     title: "", description: "", trade: "", crew_needed: 1,
     start_time: "", pay_rate: "", address: "", is_emergency: false
@@ -258,14 +261,21 @@ export default function ContractorDashboard() {
     } catch { }
   }, []);
 
+  const fetchCrewRequests = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/users/requests`);
+      setCrewRequests(res.data);
+    } catch { }
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchJobs(), fetchCrew(), fetchSubStatus()]);
+      await Promise.all([fetchJobs(), fetchCrew(), fetchSubStatus(), fetchCrewRequests()]);
       setLoading(false);
     };
     init();
-  }, [fetchJobs, fetchCrew, fetchSubStatus]);
+  }, [fetchJobs, fetchCrew, fetchSubStatus, fetchCrewRequests]);
 
   useEffect(() => {
     const remove = addListener(msg => {
@@ -277,9 +287,17 @@ export default function ContractorDashboard() {
         toast.info(`Job "${msg.job_title}" marked complete. Please verify.`);
         fetchJobs();
       }
+      if (msg.type === "crew_request_accepted") {
+        toast.success(`${msg.crew_name} accepted your crew request!`);
+        fetchCrewRequests();
+      }
+      if (msg.type === "crew_request_declined") {
+        toast.info(`${msg.crew_name} declined your crew request.`);
+        fetchCrewRequests();
+      }
     });
     return remove;
-  }, [addListener, fetchJobs]);
+  }, [addListener, fetchJobs, fetchCrewRequests]);
 
   const createJob = async (e) => {
     e.preventDefault();
@@ -339,9 +357,25 @@ export default function ContractorDashboard() {
   };
 
   const requestCrew = (member) => {
-    toast.info(`Request feature: Pre-fill a job form for ${member.name}`);
-    setJobForm(f => ({ ...f, description: `Requesting ${member.name} (${member.trade || "General Labor"})` }));
-    setShowJobForm(true);
+    setRequestingCrew(member);
+    setRequestMessage("");
+  };
+
+  const sendCrewRequest = async () => {
+    if (!requestingCrew) return;
+    try {
+      await axios.post(`${API}/users/request/${requestingCrew.id}`, {
+        crew_id: requestingCrew.id,
+        message: requestMessage,
+        job_context: { trade: requestingCrew.trade || "General Labor" }
+      });
+      toast.success(`Request sent to ${requestingCrew.name}!`);
+      setRequestingCrew(null);
+      setRequestMessage("");
+      fetchCrewRequests();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to send request");
+    }
   };
 
   const updateForm = (k, v) => setJobForm(f => ({ ...f, [k]: v }));
@@ -583,6 +617,32 @@ export default function ContractorDashboard() {
                 {jobForm.is_emergency ? "Send Emergency Alert" : "Post Job Now"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Crew Request Modal */}
+      {requestingCrew && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="card max-w-md w-full p-6 relative" data-testid="crew-request-modal">
+            <button onClick={() => setRequestingCrew(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            <h2 className="font-extrabold text-[#050A30] dark:text-white text-xl mb-1" style={{ fontFamily: "Manrope, sans-serif" }}>
+              Request {requestingCrew.name}
+            </h2>
+            <p className="text-slate-500 text-sm mb-4">{requestingCrew.trade || "General Labor"}</p>
+            <textarea
+              value={requestMessage}
+              onChange={e => setRequestMessage(e.target.value)}
+              placeholder="Add a message (optional)... e.g. I need help with a framing job next week"
+              rows={3}
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white mb-4"
+              data-testid="crew-request-message"
+            />
+            <button onClick={sendCrewRequest}
+              className="w-full bg-[#0000FF] text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
+              data-testid="send-crew-request-btn">
+              Send Request
+            </button>
           </div>
         </div>
       )}

@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import axios from "axios";
 import {
   MapPin, List, Filter, Zap, Clock, Star, RefreshCw, AlertCircle, X,
-  CheckCircle, Camera, Phone, Navigation, Briefcase, FileText, ToggleLeft, ToggleRight, AlertTriangle
+  CheckCircle, Camera, Phone, Navigation, Briefcase, FileText, ToggleLeft, ToggleRight, AlertTriangle,
+  UserCheck, UserX, MessageCircle
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -30,6 +31,8 @@ export default function CrewDashboard() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [subStatus, setSubStatus] = useState(null);
   const [profileCompletion, setProfileCompletion] = useState(null);
+  const [crewRequests, setCrewRequests] = useState([]);
+  const watchIdRef = React.useRef(null);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -67,16 +70,23 @@ export default function CrewDashboard() {
     } catch { }
   }, []);
 
+  const fetchCrewRequests = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/users/requests`);
+      setCrewRequests(res.data);
+    } catch { }
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchJobs(), fetchMyJobs(), fetchSubStatus(), fetchProfileCompletion()]);
+      await Promise.all([fetchJobs(), fetchMyJobs(), fetchSubStatus(), fetchProfileCompletion(), fetchCrewRequests()]);
       setLoading(false);
     };
     init();
-  }, [fetchJobs, fetchMyJobs, fetchSubStatus, fetchProfileCompletion]);
+  }, [fetchJobs, fetchMyJobs, fetchSubStatus, fetchProfileCompletion, fetchCrewRequests]);
 
-  // WebSocket: new job notifications
+  // WebSocket: new job notifications + crew requests
   useEffect(() => {
     const remove = addListener((msg) => {
       if (msg.type === "new_job") {
@@ -86,32 +96,56 @@ export default function CrewDashboard() {
           action: { label: "View", onClick: () => setSelectedJob(msg.job) }
         });
       }
+      if (msg.type === "crew_request") {
+        toast.info(`${msg.contractor_name} wants to hire you!`, {
+          action: { label: "View", onClick: () => fetchCrewRequests() }
+        });
+        fetchCrewRequests();
+      }
     });
     return remove;
-  }, [addListener]);
+  }, [addListener, fetchCrewRequests]);
 
-  // Location toggle handler
+  // Location toggle handler with live GPS tracking (watchPosition)
   const toggleLocation = () => {
     if (!locationEnabled) {
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
+        // Use watchPosition for live tracking
+        const id = navigator.geolocation.watchPosition(
           (pos) => {
             const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             setUserLocation(loc);
             sendLocation(loc.lat, loc.lng);
             axios.post(`${API}/users/location`, { lat: loc.lat, lng: loc.lng }).catch(() => {});
-            setLocationEnabled(true);
-            toast.success("Location enabled. Showing nearby jobs.");
           },
-          () => { toast.error("Location access denied. Please allow in browser settings."); }
+          (err) => {
+            if (err.code === 1) toast.error("Location access denied. Please allow in browser settings.");
+          },
+          { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
         );
+        watchIdRef.current = id;
+        setLocationEnabled(true);
+        toast.success("Live GPS tracking enabled. Showing nearby jobs.");
       }
     } else {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       setLocationEnabled(false);
       setUserLocation(null);
-      toast.info("Location disabled.");
+      toast.info("Location tracking disabled.");
     }
   };
+
+  // Cleanup watchPosition on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   // Online/Offline toggle
   const toggleOnlineStatus = async () => {
@@ -150,6 +184,22 @@ export default function CrewDashboard() {
       toast.success("Job marked as complete. Awaiting contractor verification.");
       fetchMyJobs(); refreshUser();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const acceptCrewRequest = async (requestId) => {
+    try {
+      await axios.put(`${API}/users/requests/${requestId}/accept`);
+      toast.success("Request accepted!");
+      fetchCrewRequests();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to accept"); }
+  };
+
+  const declineCrewRequest = async (requestId) => {
+    try {
+      await axios.put(`${API}/users/requests/${requestId}/decline`);
+      toast.info("Request declined.");
+      fetchCrewRequests();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to decline"); }
   };
 
   const acceptedIds = myJobs.map(j => j.id);
@@ -208,12 +258,12 @@ export default function CrewDashboard() {
               {isOnline ? "Online" : "Offline"}
             </button>
 
-            {/* Location Toggle */}
+            {/* Location Toggle - Live GPS */}
             <button onClick={toggleLocation}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border-2 transition-all ${locationEnabled ? "bg-blue-600 border-blue-600 text-white" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500"}`}
               data-testid="location-toggle">
               <Navigation className="w-4 h-4" />
-              {locationEnabled ? "GPS On" : "Enable GPS"}
+              {locationEnabled ? "LIVE ON MAP" : "Enable Location"}
             </button>
 
             {/* Map/List Toggle */}
@@ -362,6 +412,37 @@ export default function CrewDashboard() {
                 </div>
               )}
             </div>
+
+            {/* Crew Requests */}
+            {crewRequests.filter(r => r.status === "pending").length > 0 && (
+              <div className="card p-4" data-testid="crew-requests-panel">
+                <h3 className="font-bold text-[#050A30] dark:text-white text-sm mb-3 flex items-center gap-2" style={{ fontFamily: "Manrope, sans-serif" }}>
+                  <MessageCircle className="w-4 h-4 text-[#0000FF]" />
+                  Crew Requests ({crewRequests.filter(r => r.status === "pending").length})
+                </h3>
+                <div className="space-y-2">
+                  {crewRequests.filter(r => r.status === "pending").slice(0, 5).map(req => (
+                    <div key={req.id} className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3" data-testid={`crew-request-${req.id}`}>
+                      <p className="text-sm font-bold text-[#050A30] dark:text-white">{req.contractor_name}</p>
+                      {req.contractor_company && <p className="text-xs text-slate-500">{req.contractor_company}</p>}
+                      {req.message && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{req.message}</p>}
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => acceptCrewRequest(req.id)}
+                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                          data-testid={`accept-request-${req.id}`}>
+                          <UserCheck className="w-3 h-3" /> Accept
+                        </button>
+                        <button onClick={() => declineCrewRequest(req.id)}
+                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-300"
+                          data-testid={`decline-request-${req.id}`}>
+                          <UserX className="w-3 h-3" /> Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Referral Code */}
             <div className="card p-4 bg-gradient-to-br from-[#050A30] to-[#000C66]">
