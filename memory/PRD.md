@@ -25,8 +25,8 @@ Build a scalable on-demand workforce marketplace connecting Crew Members (worker
 - **Auth:** JWT (python-jose + bcrypt)
 
 ### URL Structure
-- Frontend: https://job-match-now.preview.emergentagent.com
-- Backend API: https://job-match-now.preview.emergentagent.com/api
+- Frontend: https://job-marketplace-61.preview.emergentagent.com
+- Backend API: https://job-marketplace-61.preview.emergentagent.com/api
 - WebSocket: wss://job-match-now.preview.emergentagent.com/api/ws/{token}
 
 ---
