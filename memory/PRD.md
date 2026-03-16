@@ -39,9 +39,13 @@ On-demand workforce marketplace connecting Crew Members (workers), Contractors (
 
 ### Profile System
 - Profile completion checklist: Photo, Phone, Address, Skills, Bio (5 checks)
-- Completion percentage calculated server-side
+- **Address field** with geocoding (saves lat/lng to location field automatically)
+- Profile completion percentage calculated server-side
 - Profile completion panel shown in crew dashboard until complete
 - Trade saved during registration
+- **Social Profile Sharing**: LinkedIn, X/Twitter, Facebook, Native Share/Copy Link
+- Admin controls which share platforms are visible (toggle per platform)
+- Public profile view at `/profile/:userId` (read-only)
 
 ### Location Features
 - GPS enable/disable toggle (browser geolocation)
@@ -65,7 +69,8 @@ On-demand workforce marketplace connecting Crew Members (workers), Contractors (
 
 ### Contractor Dashboard
 - Crew search by Name, Trade, Location (address geocoded)
-- Crew cards with View Profile, Share Profile, Request Crew buttons
+- **Crew Profile Popup Modal**: Click "View" on crew card → popup with photo, rating, jobs done, skills, recent reviews, Share + Full Profile buttons
+- Crew cards with View Profile (popup), Share Profile, Request Crew buttons
 - Job creation with emergency/regular toggle
 - Job duplication (1-click repost with "(Copy)" suffix)
 - Job status display: Posted/Accepted/In Progress/Completed/Verified
@@ -83,23 +88,32 @@ On-demand workforce marketplace connecting Crew Members (workers), Contractors (
 - 409 returned if slot already claimed
 - Red styling + EMERGENCY badge in UI
 
+### App Settings (Crew & Contractor)
+- Route: `/settings` — linked from Navbar user dropdown
+- **Sound Volume**: 0-100% slider + Test Sound button (Web Audio API beep)
+- **Vibration**: toggle (mobile device vibration on alerts)
+- **Browser Notifications**: toggle + permission request
+- **Push Notifications**: toggle
+- **Alert Types**: New Jobs, Job Accepted, Job Declined (individual toggles)
+- **Analytics & Usage Data**: opt-in sharing toggle
+- All settings persisted to `localStorage` under `thedaylaborers_app_settings`
+- Save + Reset to defaults buttons
+
 ### Admin Panel
 - Analytics: Total users, active jobs, revenue, crew utilization %, online crew, job completion rate
-- Jobs by trade bar chart
-- Top crew leaderboard
+- Jobs by trade bar chart, Top crew leaderboard
 - User management: suspend/activate/delete
-- Settings: pricing for all 4 plans, trial days, job visibility hours
+- **Settings**: Pricing (all 4 plans), trial days, job visibility hours, **Social Sharing toggles** (LinkedIn/X/Facebook/Native Share)
 - Payments table with method breakdown
 
 ### Cron Job
 - APScheduler runs every hour
-- Hides completed jobs older than job_visibility_hours (default 12 hours)
-- is_hidden field filters jobs from listings
+- Hides completed jobs older than job_visibility_hours (default 12h)
 
 ### Payments
-- Stripe: create session → webhook/status poll
+- Stripe: create session → status poll
 - PayPal: create order → capture
-- Square/CashApp: create-link → redirect → status check (order state)
+- Square/CashApp: create-link → redirect → status check
 - Annual plan support
 
 ---
@@ -110,33 +124,27 @@ On-demand workforce marketplace connecting Crew Members (workers), Contractors (
 /app
 ├── backend/
 │   ├── routes/
-│   │   ├── auth_routes.py      # Register, login
-│   │   ├── job_routes.py       # CRUD, accept, start, complete, verify, duplicate, emergency
-│   │   ├── user_routes.py      # Profile, crew search, online status, completion
-│   │   ├── admin_routes.py     # Analytics, user mgmt, settings
+│   │   ├── auth_routes.py
+│   │   ├── job_routes.py       # CRUD, accept (atomic emergency), start, complete, verify, duplicate
+│   │   ├── user_routes.py      # Profile (address+geocoding), crew search, online status, public profile
+│   │   ├── admin_routes.py     # Analytics, user mgmt, settings (social links)
 │   │   ├── payment_routes.py   # Stripe, PayPal, Square/CashApp
-│   │   └── ws_routes.py        # WebSocket manager
-│   ├── models.py               # Pydantic models
-│   ├── auth.py                 # JWT utils
-│   ├── database.py             # MongoDB connection
-│   ├── server.py               # FastAPI app + APScheduler
+│   │   └── ws_routes.py
+│   ├── server.py               # FastAPI app + APScheduler + /api/settings/public
 │   └── utils/
-│       ├── geocoding.py        # Address geocoding + haversine
-│       ├── email_utils.py      # Resend email
-│       └── ai_utils.py         # OpenAI job matching
 └── frontend/
     └── src/
         ├── pages/
-        │   ├── LandingPage.jsx
         │   ├── CrewDashboard.jsx       # Online toggle, GPS, profile completion
-        │   ├── ContractorDashboard.jsx # Crew cards, emergency, duplication
-        │   ├── AdminDashboard.jsx      # Analytics, settings, users
+        │   ├── ContractorDashboard.jsx # Crew cards, crew profile popup, emergency, duplication
+        │   ├── AdminDashboard.jsx      # Analytics, settings + social links
         │   ├── SubscriptionPage.jsx    # Square/CashApp, annual plan
-        │   └── ProfilePage.jsx
+        │   ├── ProfilePage.jsx         # Address field, social share, public view /profile/:id
+        │   └── AppSettingsPage.jsx     # Sound, vibration, notifications, analytics toggle
         └── components/
-            ├── JobCard.jsx             # Status labels, actions
+            ├── JobCard.jsx             # Status labels
             ├── JobMap.jsx
-            └── Navbar.jsx
+            └── Navbar.jsx              # App Settings in dropdown
 ```
 
 ## Key API Endpoints
@@ -145,54 +153,31 @@ On-demand workforce marketplace connecting Crew Members (workers), Contractors (
 - `GET /api/users/profile-completion` - Profile % + 5 checks
 - `PUT /api/users/online-status` - Set is_online
 - `GET /api/users/crew?name=&trade=&address=` - Search crew
+- `GET /api/users/public/{user_id}` - Public profile + recent ratings
 - `POST /api/jobs/` - Create job (gated)
 - `POST /api/jobs/{id}/accept` - Accept (atomic for emergency)
 - `POST /api/jobs/{id}/duplicate` - Duplicate
-- `POST /api/jobs/{id}/start` - Start (contractor)
-- `POST /api/jobs/{id}/verify` - Verify complete (contractor)
 - `GET /api/payments/plans` - daily/weekly/monthly/annual
 - `POST /api/payments/square/create-link` - CashApp/Square checkout
-- `GET /api/payments/square/status/{order_id}` - Check payment
 - `GET /api/admin/analytics` - Full platform analytics
+- `GET /api/settings/public` - Social sharing config (no auth)
 - WebSocket: `ws://host/api/ws?token=...`
-
-## DB Schema (key fields)
-- **users**: id, email, password_hash, role, name, phone, trade, bio, skills, profile_photo, availability, is_online, location, subscription_status, subscription_plan, subscription_end, trial_end_date, points, referral_code, rating, jobs_completed
-- **jobs**: id, contractor_id, title, trade, status, is_emergency, crew_accepted, crew_needed, pay_rate, location, start_time, is_hidden, completed_at
-- **payment_transactions**: id, user_id, plan, amount, payment_method, payment_status, session_id/order_id
 
 ## Credentials
 - Admin: admin@thedaylaborers.com / Admin@123
-- Square Location: L6EF13P7EX9GN (Built By Purpose)
-- Stripe: test mode (emergent managed key)
-- PayPal: sandbox
+- Square Location: L6EF13P7EX9GN
+- Stripe: test mode | PayPal: sandbox
 
 ---
 
-## P0 Backlog (Completed in current session)
-- ✅ Subscription gating
-- ✅ Profile completion checklist
-- ✅ Online/Offline toggle
-- ✅ GPS location toggle
-- ✅ Crew search fixed (name, trade, address)
-- ✅ Job workflow labels (Posted/Accepted/In Progress/Completed/Verified)
-- ✅ Emergency job with atomic race lock
-- ✅ Job duplication
-- ✅ Square/CashApp Pay integration
-- ✅ Annual subscription plan
-- ✅ Admin analytics enhanced (crew utilization, spending, completion rates)
-- ✅ APScheduler cron job (hide completed jobs after 12h)
-- ✅ Trade saved during registration
-
 ## P1 Backlog (Remaining)
-- [ ] Contractor spending dashboard with charts (per contractor)
-- [ ] Crew reputation score (visible on cards)
-- [ ] SMS notifications via Twilio (no credentials provided)
-- [ ] In-app calling with masked numbers (no Twilio)
+- [ ] Contractor spending dashboard (per-contractor charts)
+- [ ] Crew reputation score badge
+- [ ] Rate limiting (FastAPI slowapi) to prevent scraping
+- [ ] SMS notifications (Twilio — no credentials yet)
 
 ## P2 Future
 - [ ] React Native mobile app (iOS/Android)
-- [ ] AI-powered smart job matching enhancements
+- [ ] Smart AI job matching enhancements
 - [ ] Google Auth / social login
-- [ ] Rate limiting middleware (FastAPI slowapi)
 - [ ] Crew availability indicator (Green/Yellow/Red)

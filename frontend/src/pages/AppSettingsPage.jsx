@@ -221,7 +221,7 @@ export default function AppSettingsPage() {
           <h2 className="font-bold text-[#050A30] dark:text-white text-base mb-1 flex items-center gap-2" style={{ fontFamily: "Manrope, sans-serif" }}>
             <BarChart2 className="w-4 h-4 text-[#0000FF]" /> Analytics & Usage Data
           </h2>
-          <p className="text-xs text-slate-400 mb-4">Help us improve CatchOut Crew by sharing anonymous usage data</p>
+          <p className="text-xs text-slate-400 mb-4">Help us improve TheDayLaborers by sharing anonymous usage data</p>
 
           <SettingRow
             icon={BarChart2}
