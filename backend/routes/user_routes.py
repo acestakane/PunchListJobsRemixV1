@@ -55,10 +55,39 @@ async def set_online_status(data: OnlineStatusUpdate, current_user: dict = Depen
 @router.put("/profile")
 async def update_profile(data: ProfileUpdate, current_user: dict = Depends(get_current_user)):
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    # Geocode address if address field changed
+    if data.address and data.address != current_user.get("address"):
+        try:
+            from utils.geocoding import geocode_address
+            geo = await geocode_address(data.address)
+            if geo and geo.get("lat"):
+                update["location"] = {
+                    "lat": geo["lat"], "lng": geo["lng"],
+                    "city": geo.get("city", ""), "address": data.address
+                }
+        except Exception as e:
+            logger.warning(f"Geocoding failed for address '{data.address}': {e}")
+
     if update:
         await db.users.update_one({"id": current_user["id"]}, {"$set": update})
     updated = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
     return user_to_response(updated)
+
+
+@router.get("/public/{user_id}")
+async def get_public_profile(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a user's public profile (for popup or profile page)."""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Fetch recent ratings
+    recent_ratings = await db.ratings.find(
+        {"rated_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).limit(5).to_list(5)
+    profile = user_to_response(user)
+    profile["recent_ratings"] = recent_ratings
+    return profile
 
 
 @router.post("/location")

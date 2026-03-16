@@ -34,6 +34,25 @@ api_router.include_router(user_router, prefix="/users", tags=["users"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(payment_router, prefix="/payments", tags=["payments"])
 
+# Public settings (no auth) - social links for sharing
+from fastapi import APIRouter as _AR
+from database import db as _db
+_pub = _AR()
+
+@_pub.get("/settings/public")
+async def public_settings():
+    settings = await _db.settings.find_one({}, {"_id": 0})
+    defaults = {
+        "social_linkedin_enabled": True, "social_twitter_enabled": True,
+        "social_facebook_enabled": True, "social_native_share_enabled": True
+    }
+    if not settings:
+        return defaults
+    result = {k: v for k, v in settings.items() if k.startswith("social_")}
+    return {**defaults, **result}
+
+api_router.include_router(_pub)
+
 # WebSocket router (no /api prefix for WS path, but accessible via /api/ws)
 api_router.include_router(ws_router)
 

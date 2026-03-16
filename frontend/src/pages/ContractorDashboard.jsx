@@ -52,7 +52,109 @@ function RatingModal({ job, onClose, onSubmit }) {
   );
 }
 
-function CrewCard({ member, onRequest, onFavorite }) {
+function CrewProfileModal({ userId, onClose }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get(`${API}/users/public/${userId}`)
+      .then(r => { setProfile(r.data); setLoading(false); })
+      .catch(() => { toast.error("Failed to load profile"); onClose(); });
+  }, [userId]);
+
+  const shareProfile = () => {
+    const url = `${window.location.origin}/profile/${userId}`;
+    navigator.clipboard.writeText(url).then(() => toast.success("Profile link copied!"));
+  };
+
+  if (loading) return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="card p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0000FF] mx-auto" /></div>
+    </div>
+  );
+
+  if (!profile) return null;
+  const photo = profile.profile_photo || profile.logo;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="card max-w-sm w-full p-6 relative" onClick={e => e.stopPropagation()} data-testid="crew-profile-modal">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+
+        <div className="text-center mb-4">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-[#050A30] flex items-center justify-center mx-auto border-4 border-[#7EC8E3] mb-3">
+            {photo ? (
+              <img src={`${process.env.REACT_APP_BACKEND_URL}${photo}`} alt={profile.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white text-2xl font-extrabold">{profile.name?.[0]?.toUpperCase()}</span>
+            )}
+          </div>
+          <h2 className="font-extrabold text-[#050A30] dark:text-white text-xl" style={{ fontFamily: "Manrope, sans-serif" }}>{profile.name}</h2>
+          <p className="text-slate-500 text-sm capitalize">{profile.trade || "General Labor"}</p>
+          <div className="flex items-center justify-center gap-1 mt-1">
+            {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= Math.round(profile.rating || 0) ? "text-amber-400 fill-current" : "text-slate-300"}`} />)}
+            <span className="text-xs text-slate-400 ml-1">({profile.rating_count || 0})</span>
+          </div>
+          {profile.is_online && (
+            <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Online
+            </span>
+          )}
+        </div>
+
+        {profile.bio && <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 text-center">{profile.bio}</p>}
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="text-center bg-blue-50 dark:bg-blue-950 rounded-lg p-2">
+            <div className="font-extrabold text-[#0000FF] text-lg">{profile.jobs_completed || 0}</div>
+            <div className="text-xs text-slate-500">Jobs Done</div>
+          </div>
+          <div className="text-center bg-amber-50 dark:bg-amber-950 rounded-lg p-2">
+            <div className="font-extrabold text-amber-500 text-lg">{profile.rating_count > 0 ? profile.rating?.toFixed(1) : "New"}</div>
+            <div className="text-xs text-slate-500">Rating</div>
+          </div>
+        </div>
+
+        {profile.skills?.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {profile.skills.map(s => (
+              <span key={s} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">{s}</span>
+            ))}
+          </div>
+        )}
+
+        {profile.recent_ratings?.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-slate-500 mb-2">Recent Reviews</p>
+            {profile.recent_ratings.slice(0, 2).map((r, i) => (
+              <div key={i} className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2 mb-1">
+                <div className="flex gap-0.5 mb-0.5">
+                  {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= r.stars ? "text-amber-400 fill-current" : "text-slate-300"}`} />)}
+                </div>
+                {r.review && <p className="text-xs text-slate-600 dark:text-slate-400">{r.review}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={shareProfile}
+            className="flex items-center justify-center gap-1.5 py-2 text-sm font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors"
+            data-testid="modal-share-profile">
+            <Share2 className="w-4 h-4" /> Share
+          </button>
+          <a href={`/profile/${profile.id}`} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-1.5 py-2 text-sm font-semibold rounded-lg bg-[#0000FF] text-white hover:bg-blue-700 transition-colors"
+            data-testid="modal-view-full-profile">
+            <ExternalLink className="w-4 h-4" /> Full Profile
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CrewCard({ member, onRequest, onViewProfile }) {
   const shareProfile = () => {
     const url = `${window.location.origin}/profile/${member.id}`;
     navigator.clipboard.writeText(url).then(() => toast.success("Profile link copied!"));
@@ -77,7 +179,9 @@ function CrewCard({ member, onRequest, onFavorite }) {
           <p className="text-xs text-slate-500 capitalize">{member.trade || "General Labor"}</p>
           <div className="flex items-center gap-1 mt-0.5">
             <Star className="w-3 h-3 text-amber-400 fill-current" />
-            <span className="text-xs text-slate-600 dark:text-slate-400">{member.rating?.toFixed(1) || "New"} ({member.rating_count || 0})</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400">
+              {member.rating_count > 0 ? member.rating?.toFixed(1) : "New"} ({member.rating_count || 0})
+            </span>
           </div>
         </div>
         <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 flex-shrink-0">
@@ -93,11 +197,11 @@ function CrewCard({ member, onRequest, onFavorite }) {
         </div>
       )}
       <div className="grid grid-cols-3 gap-1.5">
-        <a href={`/profile/${member.id}`}
+        <button onClick={() => onViewProfile(member.id)}
           className="flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors"
           data-testid={`view-profile-${member.id}`}>
           <ExternalLink className="w-3 h-3" /> View
-        </a>
+        </button>
         <button onClick={shareProfile}
           className="flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors"
           data-testid={`share-profile-${member.id}`}>
@@ -123,6 +227,7 @@ export default function ContractorDashboard() {
   const [ratingJob, setRatingJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [subStatus, setSubStatus] = useState(null);
+  const [viewingCrewId, setViewingCrewId] = useState(null);
   const [jobForm, setJobForm] = useState({
     title: "", description: "", trade: "", crew_needed: 1,
     start_time: "", pay_rate: "", address: "", is_emergency: false
@@ -331,7 +436,7 @@ export default function ContractorDashboard() {
               ) : (
                 <div className="max-h-[calc(100vh-350px)] overflow-y-auto space-y-3">
                   {crew.map(member => (
-                    <CrewCard key={member.id} member={member} onRequest={requestCrew} onFavorite={() => {}} />
+                    <CrewCard key={member.id} member={member} onRequest={requestCrew} onViewProfile={setViewingCrewId} />
                   ))}
                 </div>
               )}
@@ -483,6 +588,7 @@ export default function ContractorDashboard() {
       )}
 
       {ratingJob && <RatingModal job={ratingJob} onClose={() => setRatingJob(null)} onSubmit={submitRatings} />}
+      {viewingCrewId && <CrewProfileModal userId={viewingCrewId} onClose={() => setViewingCrewId(null)} />}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import ContractorDashboard from "./pages/ContractorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
+import AppSettingsPage from "./pages/AppSettingsPage";
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -41,26 +42,18 @@ function AppRoutes() {
       <Route path="/" element={user ? <DashboardRedirect /> : <LandingPage />} />
       <Route path="/auth" element={user ? <DashboardRedirect /> : <AuthPage />} />
       <Route path="/crew/dashboard" element={
-        <ProtectedRoute roles={["crew"]}>
-          <WebSocketProvider><CrewDashboard /></WebSocketProvider>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["crew"]}><WebSocketProvider><CrewDashboard /></WebSocketProvider></ProtectedRoute>
       } />
       <Route path="/contractor/dashboard" element={
-        <ProtectedRoute roles={["contractor"]}>
-          <WebSocketProvider><ContractorDashboard /></WebSocketProvider>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["contractor"]}><WebSocketProvider><ContractorDashboard /></WebSocketProvider></ProtectedRoute>
       } />
       <Route path="/admin/dashboard" element={
-        <ProtectedRoute roles={["admin"]}>
-          <AdminDashboard />
-        </ProtectedRoute>
+        <ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>
       } />
-      <Route path="/profile" element={
-        <ProtectedRoute><ProfilePage /></ProtectedRoute>
-      } />
-      <Route path="/subscription" element={
-        <ProtectedRoute><SubscriptionPage /></ProtectedRoute>
-      } />
+      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/profile/:userId" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><AppSettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

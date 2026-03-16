@@ -335,24 +335,49 @@ export default function AdminDashboard() {
             <div className="space-y-4 mb-6">
               {[["daily_price", "Daily Pass Price ($)"], ["weekly_price", "Weekly Pass Price ($)"], ["monthly_price", "Monthly Pass Price ($)"], ["annual_price", "Annual Pass Price ($)"]].map(([key, label]) => (
                 <div key={key}>
-                  <label className="block text-sm font-semibold text-[#050A30] dark:text-white mb-1.5">{label}</label>
-                  <input type="number" step="0.01" value={editSettings[key] || ""}
-                    onChange={e => setEditSettings(s => ({ ...s, [key]: parseFloat(e.target.value) }))}
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white"
-                    data-testid={`settings-${key}`} />
+                  <label className="block text-sm font-semibold text-[#050A30] dark:text-white mb-1">{label}</label>
+                  <input type="number" step="0.01" value={settingsForm[key] || ""}
+                    onChange={e => setSettingsForm(f => ({ ...f, [key]: parseFloat(e.target.value) }))}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white" />
                 </div>
               ))}
-              {[["trial_days", "Free Trial Duration (days)"], ["job_visibility_hours", "Completed Job Visibility (hours)"]].map(([key, label]) => (
-                <div key={key}>
-                  <label className="block text-sm font-semibold text-[#050A30] dark:text-white mb-1.5">{label}</label>
-                  <input type="number" value={editSettings[key] || ""}
-                    onChange={e => setEditSettings(s => ({ ...s, [key]: parseInt(e.target.value) }))}
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white"
-                    data-testid={`settings-${key}`} />
-                </div>
-              ))}
+              <div>
+                <label className="block text-sm font-semibold text-[#050A30] dark:text-white mb-1">Free Trial Days</label>
+                <input type="number" value={settingsForm.trial_days || ""}
+                  onChange={e => setSettingsForm(f => ({ ...f, trial_days: parseInt(e.target.value) }))}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[#050A30] dark:text-white mb-1">Job Visibility (hours after complete)</label>
+                <input type="number" value={settingsForm.job_visibility_hours || ""}
+                  onChange={e => setSettingsForm(f => ({ ...f, job_visibility_hours: parseInt(e.target.value) }))}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0000FF] dark:bg-slate-800 dark:text-white" />
+              </div>
             </div>
-            <button onClick={saveSettings} className="bg-[#0000FF] text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 transition-colors" data-testid="save-settings-btn">
+
+            {/* Social Sharing Settings */}
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <h4 className="font-bold text-[#050A30] dark:text-white mb-4 text-sm" style={{ fontFamily: "Manrope, sans-serif" }}>Social Profile Sharing</h4>
+              <div className="space-y-3">
+                {[
+                  ["social_linkedin_enabled", "LinkedIn"],
+                  ["social_twitter_enabled", "X (Twitter)"],
+                  ["social_facebook_enabled", "Facebook"],
+                  ["social_native_share_enabled", "Native Share / Copy Link"],
+                ].map(([key, label]) => (
+                  <div key={key} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <span className="text-sm font-semibold text-[#050A30] dark:text-white">{label}</span>
+                    <div
+                      onClick={() => setSettingsForm(f => ({ ...f, [key]: !f[key] }))}
+                      className={`relative w-10 h-5 rounded-full cursor-pointer transition-colors flex items-center px-0.5 ${settingsForm[key] ? "bg-[#0000FF]" : "bg-slate-300"}`}
+                      data-testid={`setting-${key}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${settingsForm[key] ? "translate-x-5" : ""}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button onClick={saveSettings} className="mt-6 bg-[#0000FF] text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 transition-colors" data-testid="save-settings-btn">
               Save Settings
             </button>
           </div>

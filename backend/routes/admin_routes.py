@@ -211,13 +211,22 @@ async def get_settings(admin: dict = Depends(require_admin)):
     settings = await db.settings.find_one({}, {"_id": 0})
     if not settings:
         settings = {
-            "daily_price": 4.99,
-            "weekly_price": 24.99,
-            "monthly_price": 79.99,
-            "trial_days": 30,
-            "job_visibility_hours": 12
+            "daily_price": 4.99, "weekly_price": 24.99, "monthly_price": 79.99, "annual_price": 699.99,
+            "trial_days": 30, "job_visibility_hours": 12,
+            "social_linkedin_enabled": True, "social_twitter_enabled": True,
+            "social_facebook_enabled": True, "social_native_share_enabled": True
         }
     return settings
+
+
+@router.get("/settings/public")
+async def get_public_settings():
+    """Public endpoint — returns only social sharing config (no auth required)."""
+    settings = await db.settings.find_one({}, {"_id": 0})
+    if not settings:
+        return {"social_linkedin_enabled": True, "social_twitter_enabled": True,
+                "social_facebook_enabled": True, "social_native_share_enabled": True}
+    return {k: v for k, v in settings.items() if k.startswith("social_")}
 
 
 @router.put("/settings")

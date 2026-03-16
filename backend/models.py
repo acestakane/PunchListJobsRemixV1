@@ -127,8 +127,13 @@ class SettingsUpdate(BaseModel):
     daily_price: Optional[float] = None
     weekly_price: Optional[float] = None
     monthly_price: Optional[float] = None
+    annual_price: Optional[float] = None
     trial_days: Optional[int] = None
     job_visibility_hours: Optional[int] = None
+    social_linkedin_enabled: Optional[bool] = None
+    social_twitter_enabled: Optional[bool] = None
+    social_facebook_enabled: Optional[bool] = None
+    social_native_share_enabled: Optional[bool] = None
 
 
 # ─── Referral / Points ───────────────────────────────────────────────────────
